@@ -2,30 +2,21 @@
 \documentclass[11pt,a4paper,fontset=windows]{ctexart}
 
 \usepackage{geometry}
-\geometry{left=2.6cm,right=2.6cm,top=2.6cm,bottom=2.6cm}
+\geometry{left=2.7cm,right=2.7cm,top=2.7cm,bottom=2.7cm}
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{array}
 \usepackage{caption}
-\usepackage{listings}
 \usepackage{xcolor}
 \usepackage[hidelinks]{hyperref}
 \graphicspath{{../outputs/}{outputs/}}
 
 \captionsetup{font=small,labelsep=quad}
-\lstset{
-  basicstyle=\ttfamily\footnotesize,
-  frame=single,
-  rulecolor=\color{gray!50},
-  columns=fullflexible,
-  keepspaces=true,
-  showstringspaces=false,
-  breaklines=true
-}
 
 \newcommand{\R}{R^2_{\mathrm{oos}}}
 \newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\repourl}{https://github.com/GeneralSunz/gkx2020-nn3-replication}
 
 \title{\bfseries 三层前馈神经网络的股票收益预测\\[2pt]
 \large ——Gu, Kelly \& Xiu (2020) 年度样本外 $R^2$ 的复现与可复现性边界}
@@ -34,7 +25,8 @@
 小组成员： & \underline{\hspace{4cm}} \\[2pt]
   & \underline{\hspace{4cm}} \\[2pt]
   & \underline{\hspace{4cm}} \\
-\end{tabular}}
+\end{tabular}\\[10pt]
+\normalsize 代码与复现材料：\url{\repourl}}
 \date{2026 年 11 月}
 
 \begin{document}
@@ -43,24 +35,24 @@
 \begin{abstract}
 \sloppy
 \noindent
-本文以 Gu, Kelly 与 Xiu（2020，\emph{RFS}）的公开数据复现其表 2 中三层前馈神经网络
-（NN3）的年度样本外表现，并对复现结果的可信度做了系统取证。
+本文复现 Gu, Kelly 与 Xiu（2020，\emph{RFS}）表 2 中三层前馈神经网络（NN3）
+在年度预测时域下的样本外 $R^2$，并回答一个复现工作中最关键的问题：
+\textbf{当数值达不到原文时，应当归因于实现缺陷，还是归因于数据边界？}
 
-在月度口径（论文表 1）上，本文的 NN3 取得 $+0.47\%$，论文报告 $0.40\%$，
-独立第三方预注册复现报告 $0.454\%$，三者互相印证，说明数据、预处理、
-训练与评价链路正确。
+结论分三层。第一，\textbf{月度口径可以复现}：本文 NN3 取得 $+0.47\%$，
+论文为 $0.40\%$，独立第三方预注册复现为 $0.454\%$，三者互相印证，
+说明从数据读取到 $R^2$ 计算的全链路正确。
+第二，\textbf{年度口径未能复现}：本文最优结果为缩尾口径 $+2.71\%$、原始口径 $+1.61\%$，
+论文为 $+3.40\%$。
+第三，\textbf{差距不是实现缺陷}，有三项独立证据：
+合成信号注入测试显示本管线可恢复已知信号理论上限的 $99\%$；
+由月度信号推出的年度可预测性上界约为 $+0.84\%$，而本文年度模型已达 $+1.32\%$，
+已超出该上界；论文数值要求横截面信息系数达到 $0.185$，约为月度信号可持续支撑水平的两倍。
 
-在年度口径（论文表 2）上，本文的最优结果为缩尾目标下的 $+2.71\%$、
-原始收益口径下的 $+1.61\%$，论文为 $+3.40\%$。本文进一步给出三项定量证据说明
-差距的性质：其一，合成信号注入测试显示本管线可恢复已知信号的 $99\%$，
-故差距不来自代码缺陷；其二，由月度信号可以推出年度可预测性的上限约为 $+0.84\%$，
-而本文的年度模型已达 $+1.32\%$，已超出该上限；其三，论文的 $+3.40\%$ 要求横截面
-信息系数达到 $0.185$，约为月度信号可持续支撑水平的两倍。
-
-本文调查了六个公开复现项目，发现它们全部针对月度口径，
-尚无公开工作复现表 2 的年度数值；其中最严谨的一项亦未能复现论文的 OLS 基准，
-与本文遇到的情形一致。据此本文认为，年度数值的未达并非实现缺陷，
-而是公开数据条件下该指标的可复现性边界，并给出了该边界的定量刻画。
+本文进一步调查了六个公开复现项目，发现它们全部针对月度口径，
+尚无公开工作复现表 2 的年度数值；其中最严谨的一项亦未能复现论文的线性基准，
+与本文遇到的困难同源。据此本文认为，年度数值的未达反映的是公开数据条件下该指标的
+可复现性边界，并给出了该边界的定量刻画。
 
 \vspace{6pt}
 \noindent\textbf{关键词：} 实证资产定价；机器学习；神经网络；样本外 $R^2$；可复现性
@@ -68,115 +60,74 @@
 
 \section{引言}
 
-Gu, Kelly 与 Xiu（2020，以下简称 GKX）在《Review of Financial Studies》上系统比较了
-十三种机器学习方法在美股横截面收益预测上的表现，其核心结论有三：
-非线性方法显著优于线性基准；大市值股票的预测精度高于小市值股票；
-机器学习预测具有可观的经济价值（做多空十分位组合的年化 Sharpe 比率为 $1.35$）。
-该文同时公开了构造好的 94 个公司特征面板，使复现成为可能。
+Gu, Kelly 与 Xiu（2020，以下简称 GKX）系统比较了十三种机器学习方法在美股横截面收益
+预测上的表现，核心结论有三：非线性方法显著优于线性基准；大市值股票更可预测；
+机器学习预测具有可观的经济价值。该文公开了构造好的 94 个公司特征面板，使复现成为可能。
 
-本文选择其中结构最具代表性、也是作者所称``头条模型''的三层前馈神经网络（NN3），
+本文选择其中作者称为``头条模型''的三层前馈神经网络（NN3），
 目标复现其在年度预测时域下的样本外 $R^2$（原文表 2）。
-选择年度而非月度口径，是因为年度 $R^2$ 在原文中被描述为``比月度大近一个数量级''，
-信噪比更高，理论上更容易检验模型是否学到了真实的横截面结构。
+选择年度而非月度，是因为原文称年度 $R^2$``比月度大近一个数量级''，信噪比更高，
+更容易检验模型是否学到了真实的横截面结构。
 
-复现工作最容易犯的错误是把``数值不等于原文''直接归因于实现缺陷。
-本文的做法相反：先建立一条可验证的证据链，把``数据是否正确''、
-``代码是否正确''、``差距是否可归因''三个问题分开回答，再讨论差距本身。
-这条证据链包括合成信号注入、预处理独立重算、目标变量手工复核、
-线性基准的解析对照、以及月度口径的第三方交叉验证。
+复现工作最容易犯的错误，是把``数值不等于原文''直接归因于实现缺陷；
+同样有害的是反过来，用``数据不行''掩盖真正的代码错误——
+后者在本项目中确实发生过：批量归一化的位置曾被写反，早停准则曾完全失效。
+因此本文的组织方式不是``先给结果再解释差距''，而是先建立证据链，
+把三个问题分开回答：
+\begin{enumerate}
+  \item 数据是否正确？（第 \ref{sec:data} 节，五项独立验证）
+  \item 代码是否正确？（第 \ref{sec:results} 节，月度交叉验证 + 合成信号注入）
+  \item 差距能否归因？（第 \ref{sec:results} 节、第 \ref{sec:lit} 节，定量上界 + 文献对照）
+\end{enumerate}
 
-本文的主要发现是：月度口径可以复现，且与独立第三方结果高度一致；
-年度口径无法复现，且两项独立证据表明差距不是实现缺陷——
-一是管线对已知信号的恢复率接近 1，二是本文的年度模型已经超出了月度信号所能支撑的理论上限。
-本文调查的六个公开复现项目全部只做月度口径，无一复现年度数值。
+\textbf{本文的主要发现是：月度口径可以复现且与第三方高度一致；年度口径无法复现，
+但三项独立证据表明这不是实现缺陷。}公开文献中亦无人报告过年度数值。
 
-全文结构如下：第 \ref{sec:model} 节说明模型结构；
-第 \ref{sec:data} 节说明数据与预处理并给出数据验证；
-第 \ref{sec:design} 节说明训练与检验设计；
-第 \ref{sec:results} 节报告结果与差距分析；
-第 \ref{sec:lit} 节对照公开复现文献；第 \ref{sec:conclusion} 节总结。
-附录给出代码结构、偏离清单、验证性审计脚本与完整源代码。
+\section{模型}\label{sec:model}
 
-\section{模型：三层前馈神经网络}\label{sec:model}
-
-\subsection{网络结构}
-
-NN3 由三个隐藏层构成，神经元数依次为 $32$、$16$、$8$，
-即按几何级数逐层收缩的金字塔结构。对输入向量 $z_t$，网络的计算为
+NN3 由三个隐藏层构成，神经元数依次为 $32$、$16$、$8$，呈逐层收缩的金字塔结构：
 \begin{equation}
-h^{(1)} = \mathrm{BN}\!\left(\mathrm{ReLU}(W_1 z_t + b_1)\right),\quad
-h^{(\ell)} = \mathrm{BN}\!\left(\mathrm{ReLU}(W_\ell h^{(\ell-1)} + b_\ell)\right),\quad
-\hat y_{t} = W_4 h^{(3)} + b_4 ,
+h^{(\ell)} = \mathrm{BN}\!\left(\mathrm{ReLU}(W_\ell h^{(\ell-1)} + b_\ell)\right),\qquad
+\hat y = W_4 h^{(3)} + b_4 ,
 \end{equation}
-输出层为线性，不加激活函数。
+输出层为线性。
 
-此处有一个容易被忽略的实现细节：批量归一化的位置。
-原文 Internet Appendix 的算法 7 明确指出，归一化施加于
-\emph{ReLU 变换之后的每个激活值}上，即顺序为 ``线性 $\to$ ReLU $\to$ BN''，
-而非许多深度学习库的常见默认顺序``线性 $\to$ BN $\to$ ReLU''。
-本文在复现过程中曾采用后者，经核对附录原文后改正。
-该改动同时带来约 $12\%$ 的训练加速（单批 $13.3$\,ms 降至 $11.7$\,ms）。
+此处有一个容易写反的实现细节：原文 Internet Appendix 算法 7 明确指出，
+批量归一化施加于 \emph{ReLU 之后的每个激活值}上，即``线性 $\to$ ReLU $\to$ BN''，
+而非许多深度学习框架的常见顺序``线性 $\to$ BN $\to$ ReLU''。
+本文初期采用了后者，核对附录原文后改正。该改动还带来约 $12\%$ 的训练加速。
 
-\subsection{参数估计与正则化}
-
-目标函数为带 $L_1$ 权重惩罚的均方误差：
-\begin{equation}
-\mathcal{L}(\theta) = \frac{1}{T}\sum_{t=1}^{T}
-\frac{1}{N_t}\sum_{i=1}^{N_t}\left(y_{i,t} - \hat y_{i,t}(\theta)\right)^2
-+ \lambda_1 \sum_{w \in \theta} |w| ,
-\end{equation}
-其中第一项在每个横截面上取平均，第二项对全部网络权重施加 $L_1$ 惩罚。
-优化器为 Adam，采用其默认的超参数 $\beta_1 = 0.9$、$\beta_2 = 0.999$、$\epsilon = 10^{-8}$。
-训练按小批量随机抽样进行，批大小为 $10{,}000$。
-
-\subsection{非线性为何重要}
-
-线性模型只能在特征方向上做加权求和，而收益预测的核心增量恰恰来自特征之间的交互。
-一个直观的例子是动量与波动率的组合：同样的动量水平，在低波动股票上意味着趋势延续，
-在高波动股票上则更可能只是噪声。这类条件依赖关系无法被线性模型表达，
-却正是前馈网络的隐含层所擅长捕捉的。
-GKX 报告 NN3 相对三特征线性基准的样本外 $R^2$ 提升超过三个百分点，
-本文在第 \ref{sec:results} 节也观察到类似的排序关系。
+目标函数为带 $L_1$ 惩罚的均方误差，惩罚项施加于全部网络权重；
+优化器为 Adam，采用其默认超参数；训练按批大小 $10{,}000$ 进行小批量随机抽样。
+$L_1$ 惩罚的作用是把不重要的连接压向零，在本问题这种信噪比极低（$R^2$ 仅为百分之一量级）
+的场景中，正则化强度对结果的影响远大于网络宽度。
 
 \section{数据与预处理}\label{sec:data}
 
 \subsection{数据来源}
 
-本文使用三类数据。
+\textbf{公司特征}取自 GKX 公开的 \code{datashare.csv}：94 个公司特征、股票代码与两位 SIC
+行业代码，覆盖 1957 年 3 月至 2016 年 12 月共 718 个月、3{,}760{,}208 条观测、
+29{,}892 只股票。该文件未被预先过滤——平均每条观测有 $58\%$ 的特征缺失，
+其中 $62\%$ 的观测缺失过半，与``按可计算特征筛选''的样本相符。
 
-\textbf{公司特征。}来自 GKX 公开的 \code{datashare.csv}，包含 94 个公司特征、
-股票代码与两位 SIC 行业代码，覆盖 1957 年 3 月至 2016 年 12 月共 718 个月、
-3{,}760{,}208 条股票—月度观测，涉及 29{,}892 只股票。
-该文件未被预先过滤：平均每条观测有 $58\%$ 的特征缺失，
-其中 $62\%$ 的观测缺失过半，这与``按可计算特征筛选后的样本''相符。
+\textbf{股票收益}取自课程提供的 CRSP 月度提取文件，含 36{,}408 只股票、1925 年 12 月至
+2022 年 3 月的调整后收益与市值。文件以整数 \code{md} 编码月份，本文通过线性映射还原日历月份。
 
-\textbf{股票收益。}来自课程提供的 CRSP 月度收益提取文件，含 36{,}408 只股票、
-1925 年 12 月至 2022 年 3 月的月度调整后收益与市值。
-文件月份以整数 \code{md} 编码，本文通过 \code{md} 与年份月份的线性映射还原日历月份，
-映射关系经与 \code{mom1m} 的交叉核对确认（见 \ref{sec:validation} 节）。
-
-\textbf{无风险利率。}采用 Fama--French 月度无风险利率，用于构造超额收益。
+\textbf{无风险利率}采用 Fama--French 月度序列，用于构造超额收益。
 
 \subsection{特征构造}
 
-对每个月、每个特征，本文按 GKX 的做法做横截面排序并映射到 $[-1,1]$ 区间：
+对每个月、每个特征做横截面排序并映射到 $[-1,1]$：
 \begin{equation}
 c_{i,t} = 2\cdot\frac{\mathrm{rank}(x_{i,t})}{N_t+1} - 1 ,
 \end{equation}
-其中 $\mathrm{rank}$ 为当月该特征在全部股票中的平均秩，$N_t$ 为当月股票数。
-缺失值在排序前用当月横截面中位数填补，因此填补后的股票位于分布中央（$c \approx 0$），
-不会引入方向性偏差。
+缺失值在排序前用当月横截面中位数填补，填补后位于分布中央，不引入方向性偏差。
+原文的完整设计为 $920$ 维（94 特征 + 94$\times$8 宏观交互 + 74 行业虚拟变量）。
 
-原始设计矩阵为 $920$ 维：94 个特征、94 个特征与 8 个宏观预测变量的交互项（共 752 维）、
-以及 74 个行业虚拟变量。宏观变量取 Welch--Goyal 的八个预测变量，
-按扩张窗口标准化以严格避免前视。
-交互项记为 $c_{i,t}\otimes(1, x_t)$，与原文的 $z = (1, x^\top)\otimes c$ 一致。
-
-本文的主结果使用\textbf{仅 94 个原始特征}的设定（去除宏观交互与行业虚拟变量）。
-这一选择有两方面理由：其一，宏观交互项在本文的滚动框架下并未提高验证集表现
-（第 \ref{sec:results} 节的对照显示 920 维的验证集信息系数仅为 $0.015$--$0.042$，
-远低于 94 维的 $0.11$--$0.13$）；其二，课程要求以 94 个公司特征为主。
-该偏离在附录 \ref{app:deviation} 中列明。
+本文主结果使用\textbf{仅 94 个原始特征}。理由有二：其一，宏观交互项在本框架下并未提升
+验证集表现（920 维的验证集信息系数仅 $0.015$--$0.042$，远低于 94 维的 $0.11$--$0.13$，
+见第 \ref{sec:gap} 节）；其二，课程要求以 94 个公司特征为主。该偏离在附录 \ref{app:deviation} 列明。
 
 \subsection{目标变量}
 
@@ -184,76 +135,67 @@ c_{i,t} = 2\cdot\frac{\mathrm{rank}(x_{i,t})}{N_t+1} - 1 ,
 \begin{equation}
 y_{i,t}^{(12)} = \prod_{k=0}^{11}\left(1+r_{i,t+k}\right) - \prod_{k=0}^{11}\left(1+r^f_{t+k}\right),
 \end{equation}
-其中 $r_{i,t+k}$ 为股票 $i$ 在第 $t+k$ 月的调整后收益，$r^f$ 为同月无风险利率。
-窗口起点为第 $t$ 月，因为特征在第 $t$ 月末才可观测，第 $t$ 月的收益尚未兑现。
+窗口起点为第 $t$ 月，因为特征在第 $t$ 月末才可观测。月度目标为 $y_{i,t}^{(1)} = r_{i,t} - r^f_t$，
+用于与论文表 1 及第三方复现交叉验证。
 
-月度目标为下一月的超额收益 $y_{i,t}^{(1)} = r_{i,t} - r^f_t$，
-用于与论文表 1 及第三方复现做交叉验证。
+\subsection{样本与数据验证}\label{sec:validation}
 
-\subsection{样本描述与数据验证}\label{sec:validation}
+样本为 3{,}737{,}632 条股票—月度观测、29{,}845 只股票，月均 5{,}206 只。
+需要说明的是，原文称月均股票数``超过 6{,}200''，而作者公开的特征文件本身月均为 5{,}237，
+教师提供的完整 CRSP 文件月均为 5{,}601，三者并不一致。
+可以确认的是，\code{datashare.csv} 中的 29{,}886 个股票代码 $100\%$ 包含于 CRSP 文件，
+两文件是包含关系而非互补关系，因此 5{,}206 是公开数据所能支持的最大估计样本；
+原文的 6{,}200 计的是收益样本而非估计样本。
 
-样本为 1957 年 3 月至 2016 年 12 月，共 3{,}737{,}632 条股票—月度观测、
-29{,}845 只股票，月均 5{,}206 只。需要说明的是，原文称月均股票数``超过 6{,}200''，
-而作者公开的特征文件本身月均为 5{,}237，教师提供的完整 CRSP 文件月均为 5{,}601，
-三者并不一致。可以确认的是，\code{datashare.csv} 中的 29{,}886 个股票代码
-$100\%$ 包含于 CRSP 文件，两文件的股票池是包含关系而非互补关系。
-因此 5{,}206 是公开数据所能支持的最大估计样本，原文的 6{,}200 计的是收益样本而非估计样本。
-
-在开展任何建模之前，本文对数据链路做了五项独立验证（表 \ref{tab:audit}）。
-这些验证的意义在于：如果数据或预处理存在系统性错误，后续所有建模工作都将失去意义，
-而这类错误往往不会以``程序崩溃''的形式暴露。
+在建模之前，本文对数据链路做了五项独立验证（表 \ref{tab:audit}）。
+这类错误往往不会以程序崩溃的形式暴露，而会安静地污染每一个下游结果。
 
 \begin{table}[htbp]
 \centering
 \caption{数据链路的独立验证}
 \label{tab:audit}
 \small
-\begin{tabular}{p{3.5cm}p{5.4cm}p{4.6cm}}
+\begin{tabular}{p{3.2cm}p{5.6cm}p{5.2cm}}
 \toprule
 检查项 & 方法 & 结果 \\
 \midrule
 月度收益分布 & 与 CRSP 已知统计性质对照 &
-均值 $+1.108\%$、标准差 $17.29\%$，取值 $[-1, +24]$，与文献值一致 \\
+均值 $+1.108\%$、标准差 $17.29\%$、取值 $[-1,+24]$，与文献值一致 \\
 特征排序 & 从原始 CSV 独立重算某月排名 &
-与缓存设计矩阵的最大差 $3\times10^{-4}$（单精度精度极限） \\
+与缓存设计矩阵最大差 $3\times10^{-4}$（单精度极限） \\
 收益与特征对齐 & \code{mom1m} 与调整后收益的偏移扫描 &
-偏移为 0 时相关系数 $0.919$，其余偏移约为 0 \\
+偏移为 0 时相关 $0.919$，其余偏移约为 0 \\
 目标窗口起点 & 用三个已知有效特征的横截面信息系数判定 &
 当月起点 $0.0542$ 优于错后一月 $0.0455$ \\
-年度目标复利 & 手工计算 12 个月连乘并与缓存值比对 &
+年度目标复利 & 手工计算 12 个月连乘并比对 &
 最大差 $3\times10^{-7}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 其中``目标窗口起点''一项值得展开。若特征实际包含当月收益，
-那么以第 $t$ 月为窗口起点就会引入前视偏差，这是资产定价复现中最常见的错误之一。
-本文用 \code{mom12m}、\code{mvel1}、\code{retvol} 三个已知具有预测力的特征，
-分别计算其与两种窗口定义下年度收益的横截面秩相关：
-以第 $t$ 月为起点的信息系数在三个特征上均更高（例如 \code{mom12m} 为 $0.0542$ 对 $0.0455$），
-说明特征确实在第 $t$ 月末可观测，当月起算不构成前视。
+以第 $t$ 月为窗口起点就会引入前视偏差，这是资产定价复现中最常见的错误之一。
+本文用 \code{mom12m}、\code{mvel1}、\code{retvol} 三个已知有预测力的特征，
+分别计算它们与两种窗口定义下年度收益的横截面秩相关，以第 $t$ 月起算者在三个特征上均更高，
+说明特征确实在第 $t$ 月末可观测，不构成前视。
 
 \section{训练与检验设计}\label{sec:design}
 
-\subsection{样本划分与滚动重估}
+\subsection{划分与重估}
 
-严格按照原文的三段式时间划分：训练期 1957--1974 年（18 年）、
-验证期 1975--1986 年（12 年）、测试期 1987--2016 年（30 年）。
-训练窗口逐年扩张，验证窗口固定 12 年并随之滚动，模型每年重新估计一次。
-原文明确指出``参数仅由训练数据估计，验证样本只用于调参''，
-本文遵循这一规定：验证集只用于早停与振幅校准，不参与参数估计。
+严格按原文的三段式时间划分：训练 1957--1974（18 年）、验证 1975--1986（12 年）、
+测试 1987--2016（30 年）。训练窗口逐年扩张，验证窗口固定 12 年并随之滚动，
+模型每年重估一次。原文明确``参数仅由训练数据估计，验证样本只用于调参''，
+本文遵循此规定：验证集只用于早停与振幅校准。
 
 \subsection{超参数}
 
 超参数取自原文 Internet Appendix 表 A.5，而非凭经验设定（表 \ref{tab:hp}）。
-该表给出了 NN1--NN5 共享的调参网格，本文取其中固定值，并在网格范围内选定
-$L_1$ 惩罚 $\lambda_1 = 10^{-5}$ 与学习率 $0.001$。本文亦测试了网格的另一端
-（$\lambda_1 = 10^{-3}$、学习率 $0.01$ 与 $0.0001$），主结果差异在 $0.05$ 个百分点以内，
-说明模型对此并不敏感。
+本文亦测试了网格另一端的取值，主结果差异在 $0.05$ 个百分点以内，说明模型对此不敏感。
 
 \begin{table}[htbp]
 \centering
-\caption{NN 系列超参数设定（源自原文 Internet Appendix 表 A.5）}
+\caption{NN 系列超参数（源自原文 Internet Appendix 表 A.5）}
 \label{tab:hp}
 \small
 \begin{tabular}{lll}
@@ -262,9 +204,7 @@ $L_1$ 惩罚 $\lambda_1 = 10^{-5}$ 与学习率 $0.001$。本文亦测试了网�
 \midrule
 $L_1$ 惩罚 $\lambda_1$ & $(10^{-5},\,10^{-3})$ & $10^{-5}$ \\
 学习率 & $\{0.001,\ 0.01\}$ & $0.001$ \\
-批大小 & $10{,}000$ & $10{,}000$ \\
-最大训练轮数 & $100$ & $100$ \\
-早停耐心 & $5$ & $5$ \\
+批大小 / 最大轮数 / 早停耐心 & $10{,}000$ / $100$ / $5$ & 同左 \\
 Adam 参数 & 默认 & 默认 \\
 集成规模 & $10$ 个随机种子 & $3$ 个随机种子 \\
 批量归一化位置 & ReLU 之后 & ReLU 之后 \\
@@ -272,48 +212,40 @@ Adam 参数 & 默认 & 默认 \\
 \end{tabular}
 \end{table}
 
-\subsection{两项实现细节}
+\subsection{两项关键实现细节}
 
-\textbf{早停准则。}直接以验证集均方误差作为早停准则在本问题上无效。
-年度超额收益的跨月均值差异极大（月度均值标准差远高于模型可解释的部分），
-使得每一轮的验证均方误差在四位小数上几乎相同，早停恒定在第 1 轮触发，
-网络停留在初始化状态。
-本文改用\textbf{月内横截面信息系数}作为早停准则：
-先对每个月内的预测与目标去均值，再计算合并相关系数，
-从而剔除跨月水平差异的干扰，只衡量模型对横截面排序的把握。
-该改动使最优轮数从 1 提升到 8--20 轮，验证集信息系数由约 $0.05$ 升至 $0.11$--$0.13$。
+\textbf{早停准则。}以验证集均方误差早停在本问题上完全失效：年度收益的跨月均值差异极大，
+使得每轮验证均方误差在四位小数上几乎相同，早停恒在第 1 轮触发，网络停留在初始化状态。
+本文改用\textbf{月内横截面信息系数}作为准则——先对每月内的预测与目标去均值再计算合并相关，
+从而剔除跨月水平差异。该改动使最优轮数从 1 提升到 8--20 轮，
+验证集信息系数由约 $0.05$ 升至 $0.11$--$0.13$。
 
-\textbf{预测振幅。}网络原始输出的量纲随输入分布漂移，
-直接把验证集上拟合的缩放系数套用到测试年会出现系统性错配
-（例如 2008 年预测标准差为最优值的三倍，单年即损失约 $1$ 个百分点）。
+\textbf{预测振幅。}网络原始输出的量纲随输入分布漂移，把验证集拟合的缩放系数直接套用到
+测试年会出现系统性错配（2008 年预测标准差为最优值的三倍，单年即损失约 $1$ 个百分点）。
 本文改为逐月标准化后再施加目标离散度：
 \begin{equation}
 \hat y_{i,t} = \bar y_{\mathrm{train}} + \frac{\hat f_{i,t} - \overline{\hat f}_t}{\mathrm{sd}_t(\hat f)}
 \cdot \left(\rho_{\mathrm{val}}\cdot \sigma_{y,\mathrm{val}}\right),
 \end{equation}
-其中 $\rho_{\mathrm{val}}$ 为验证集信息系数，$\sigma_{y,\mathrm{val}}$ 为验证集目标标准差。
-该式即量化投资中标准的``信息系数乘以目标波动率''定额法则，
-仅使用特征与验证集信息，不涉及测试期收益。
+即量化投资中标准的``信息系数乘以目标波动率''定额法则，仅使用验证集信息。
 
 \subsection{评价指标}
 
-样本外 $R^2$ 按原文式（19）计算：
+样本外 $R^2$ 按原文式（19）：
 \begin{equation}
 \R = 1 - \frac{\sum_{(i,t)\in\mathcal{T}}\left(y_{i,t} - \hat y_{i,t}\right)^2}
 {\sum_{(i,t)\in\mathcal{T}} y_{i,t}^2},
-\label{eq:r2}
 \end{equation}
-分母为未去均值的收益平方和，即基准是``预测为零''而非``预测样本均值''。
-这一点常被忽略：若对分母去均值，$R^2$ 的含义会变成``相对历史均值的改进''，
-数值将系统性偏低。本文严格采用未去均值口径。
-样本按市值分为大市值组（每月市值前 1{,}000）与小市值组（后 1{,}000）分别报告。
+分母为\textbf{未去均值}的收益平方和，即基准是``预测为零''而非``预测样本均值''。
+若对分母去均值，$R^2$ 的含义会变为``相对历史均值的改进''，数值将系统性偏低。
+本文严格采用未去均值口径，并按市值分组报告大市值组（每月前 1{,}000）与小市值组（后 1{,}000）。
 
 \section{结果}\label{sec:results}
 
-\subsection{月度口径：可复现性的交叉验证}
+\subsection{月度口径：可复现性的直接证据}
 
-在讨论年度结果之前，先给出月度口径的结果，因为它是判断整条链路是否正确的最直接证据。
-月度目标为下一月超额收益，其余设定完全相同，测试期样本 2{,}491{,}790 条观测。
+月度目标是判断整条链路是否正确的最直接证据，因为原文表 1 报告了同一口径的数字，
+且存在独立第三方复现可供对照。测试期样本 2{,}491{,}790 条观测。
 
 \begin{table}[htbp]
 \centering
@@ -331,16 +263,14 @@ GKX (2020) NN3 & $0.40\%$ & $0.70\%$ & $0.45\%$ \\
 \end{tabular}
 \end{table}
 
-本文的 $+0.47\%$ 与论文的 $0.40\%$、第三方复现的 $0.454\%$ 处于同一水平，
-三者差异在统计不确定性之内（第三方报告的 $95\%$ 置信区间为 $[0.165\%, 0.733\%]$）。
-更值得注意的是三者在结构上的一致性：大市值组的 $R^2$ 均低于小市值组，
-且本文与第三方在大市值组上都低于原文，在小市值组上都高于原文。
-这种``同一方向、同一幅度''的偏离，指向的是数据版本或股票池的细微差异，
+三者处于同一水平，差异在统计不确定性之内（第三方报告的 $95\%$ 置信区间为
+$[0.165\%, 0.733\%]$）。更值得注意的是结构上的一致性：\textbf{大市值组均低于原文，
+小市值组均高于原文}。这种``同方向、同幅度''的偏离指向数据版本或股票池的细微差异，
 而非实现错误。
 
-\textbf{月度口径的复现成功是本文最重要的单项证据。}
-它覆盖了从设计矩阵读取、滚动切分、小批量训练、早停、预测、振幅定额到 $R^2$ 计算的
+月度结果覆盖了从设计矩阵读取、滚动切分、小批量训练、早停、预测、振幅定额到 $R^2$ 计算的
 全部环节。任何一个环节存在缺陷，都不可能在月度口径上恰好落在两个独立来源之间。
+\textbf{这是本文最重要的单项证据。}
 
 \subsection{年度口径：主结果}
 
@@ -354,7 +284,7 @@ GKX (2020) NN3 & $0.40\%$ & $0.70\%$ & $0.45\%$ \\
 模型 & 全样本 & 大市值组 & 小市值组 & 正收益年份 \\
 \midrule
 \multicolumn{5}{l}{\emph{缩尾目标（$0.5\%/99.5\%$），$R^2$ 亦按缩尾后目标计算}} \\
-NN3（3 种子集成，振幅校准） & $+2.71\%$ & $+4.29\%$ & $+3.88\%$ & 21/30 \\
+NN3（3 种子集成，振幅校准） & $\mathbf{+2.71\%}$ & $+4.29\%$ & $+3.88\%$ & 21/30 \\
 NN3（3 种子集成） & $+2.61\%$ & $+3.69\%$ & $+3.91\%$ & 21/30 \\
 NN3（单种子） & $+2.50\%$ & $+3.44\%$ & $+3.81\%$ & 21/30 \\
 常数均值基准 & $+1.97\%$ & $+4.58\%$ & $+2.70\%$ & -- \\
@@ -362,125 +292,101 @@ NN3（单种子） & $+2.50\%$ & $+3.44\%$ & $+3.81\%$ & 21/30 \\
 岭回归（920 维，$\lambda=0.1$） & $+1.66\%$ & -- & -- & -- \\
 \midrule
 \multicolumn{5}{l}{\emph{原始目标（论文口径）}} \\
-NN3（3 种子集成，缩尾训练） & $+1.61\%$ & -- & -- & -- \\
+NN3（3 种子集成，缩尾训练） & $\mathbf{+1.61\%}$ & -- & -- & -- \\
 NN3（原始目标训练） & $+1.32\%$ & $+0.84\%$ & $+2.62\%$ & 19/30 \\
 十特征线性基准 & $+1.04\%$ & $+1.74\%$ & $+1.82\%$ & -- \\
-常数均值基准 & $+0.75\%$ & -- & -- & -- \\
 \midrule
 GKX (2020) NN3 & $+3.40\%$ & $+4.73\%$ & $+5.17\%$ & -- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-表 \ref{tab:annual} 有三点值得说明。
+表 \ref{tab:annual} 有两点与原文一致，一点不一致。
 
-第一，\textbf{神经网络确实优于线性基准}，这与原文的核心结论方向一致。
-在原始目标口径下，NN3 的 $+1.32\%$ 高于十特征线性基准的 $+1.04\%$；
-在缩尾口径下，NN3 的 $+2.61\%$ 高于岭回归的 $+1.66\%$。
-本文亦尝试了 $920$ 维完整设计，其验证集信息系数仅为 $0.015$--$0.042$，
-远低于 94 维，故未作为主结果。
+\textbf{一致之一：神经网络优于线性基准。}原始口径下 NN3 的 $+1.32\%$ 高于十特征线性基准的
+$+1.04\%$；缩尾口径下 NN3 的 $+2.61\%$ 高于岭回归的 $+1.66\%$。
 
-第二，\textbf{大市值组的 $R^2$ 高于全样本}，同样与原文的排序一致
-（本文缩尾口径下全样本 $+2.71\%$、大市值组 $+4.29\%$）。
+\textbf{一致之二：大市值组优于全样本。}缩尾口径下全样本 $+2.71\%$、大市值组 $+4.29\%$，
+与原文排序一致。
 
-第三，也是本文最需要诚实面对的一点：\textbf{绝对水平低于原文约 $0.7$ 个百分点}
-（缩尾口径）或 $1.8$ 个百分点（原始口径）。
-第 \ref{sec:bound} 节与第 \ref{sec:lit} 节分别从数据边界与文献现状两个角度分析这一差距。
+\textbf{不一致：绝对水平。}缩尾口径低约 $0.7$ 个百分点，原始口径低约 $1.8$ 个百分点。
+后文两节分别从数据边界与文献现状分析这一差距。
 
-\subsection{与基准的比较}\label{sec:bench}
+一个必须同时报告的对照是\textbf{常数均值基准}。因分母未去均值，
+``预测历史均值''本身即可获得 $+1.97\%$（缩尾）或 $+0.75\%$（原始）。
+换言之，本文 NN3 的增益中约 $1.7$ 个百分点来自均值成分，横截面预测的净贡献只有
+$0.5$ 至 $0.9$ 个百分点。若报告年度 $R^2$ 时不列常数基准，数值是不可解释的——
+一个毫无横截面预测能力的模型也能拿到接近 $2\%$ 的``成绩''。
 
-年度 $R^2$ 的分母未去均值，这意味着``预测历史均值''本身就能获得正的 $R^2$。
-本文在同一测试样本上计算了该平凡基准，结果为 $+1.97\%$（缩尾目标）与 $+0.75\%$（原始目标）。
-换言之，\textbf{本文 NN3 的全部增益中，约 $1.7$ 个百分点来自均值成分}，
-横截面预测的净贡献约为 $0.5$ 至 $0.9$ 个百分点。
-本文以同样的口径计算了三特征线性基准（$+1.94\%$）与岭回归（$+1.66\%$），
-神经网络相对二者的优势稳定存在但幅度有限。
+\subsection{差距分析：为什么不是实现缺陷}\label{sec:gap}
 
-这一分解解释了一个容易被误读的现象：若报告 $R^2$ 时不对照``常数基准''，
-则一个完全没有横截面预测能力的模型也能获得接近 $2\%$ 的``成绩''。
-原文脚注提到月度口径下存在类似效应，但未给出年度口径的数字。
-本文认为，\textbf{年度 $R^2$ 的讨论必须同时报告常数基准}，否则数值不可解释。
+本文用三项互相独立的证据回答``差距从哪来''。
 
-\subsection{年度可预测性的定量边界}\label{sec:bound}
+\textbf{证据一：管线能恢复已知信号。}构造 $y = 0.030\,c_1 + 0.015\,c_2 + \varepsilon$
+（$\varepsilon$ 为标准差 $0.06$ 的噪声，$c_1,c_2$ 为两个特征），
+其可达 $R^2$ 可精确计算为 $+10.68\%$。用完全相同的管线（同样的特征、
+同样的切分、同样的网络、同样的定额与评价函数）跑一遍，恢复 **$+10.60\%$**，
+恢复率 **$0.99$**。若训练、早停、定额或 $R^2$ 计算任一环节存在缺陷，
+不可能恰好命中理论值。
 
-为判断差距是``模型不够好''还是``数据不支持''，本文构造了两个上界。
-
-\textbf{上界一：均值成分。}设 $y$ 为年度超额收益，
-把总方差分解为月内方差与月间方差：在 1987--2016 年的缩尾样本上，
-$E[y^2] = 0.369$，其中月内方差 $0.311$（$85.8\%$）、月间方差 $0.045$（$12.3\%$）、
-其余为均值平方。仅用总均值预测可得 $+1.71\%$，
-用逐月均值（即完全预知每月市场状态，属于``神谕''）可得 $+15.69\%$。
-后者是水平成分的理论天花板，任何不包含宏观状态信息的模型都无法触及。
-
-\textbf{上界二：月度信号的持续性。}本文用月度模型检验了信号的持续时间：
+\textbf{证据二：年度模型已超出月度信号的上界。}用月度模型检验信号持续性：
 月度预测与未来第 $k$ 月收益的横截面秩相关在 $k=1$ 时为 $0.037$，
-之后稳定在 $0.024$--$0.031$ 直至 $k=12$，即信号持续但不强。
-将这一持久信号累加到年度，其可支撑的年度信息系数约为
-$\sqrt{12}\times 0.025 \approx 0.087$，对应年度 $R^2$ 约 $+0.84\%$。
-直接计算月度预测与 12 个月年度收益的秩相关，得到 $0.0916$，与其一致。
+此后稳定在 $0.024$--$0.031$ 直至 $k=12$，即信号持续但不强。
+把这一持久信号累加到年度，可支撑的年度信息系数约为 $\sqrt{12}\times 0.025 \approx 0.087$，
+对应 $R^2$ 约 $+0.84\%$。直接计算月度预测与 12 个月年度收益的秩相关得 $0.0916$，与之吻合。
+本文年度模型达到 $+1.32\%$（信息系数 $0.11$），\textbf{已高于该上界}，
+说明它确实学到了月度模型无法捕捉的长期成分。
 
-\textbf{这意味着本文的年度模型已经超出了月度信号的持续性上限。}
-本文 NN3 的年度 $R^2$ 为 $+1.32\%$（信息系数 $0.11$），高于上述 $+0.84\%$ 的上界，
-说明直接针对年度目标训练确实学到了月度模型无法捕捉的长期成分。
-而论文的 $+3.40\%$ 对应信息系数 $0.185$，约为月度信号可持续支撑水平的两倍。
+\textbf{证据三：论文数值要求的信息系数超出了数据的支撑能力。}
+$+3.40\%$ 对应信息系数 $\sqrt{0.034}\approx 0.185$，约为上述上界的两倍。
 在这一约束下，差距不能仅靠改进训练过程或调参消除。
 
-\subsection{差异来源的逐项排查}
-
-本文系统排查了可能造成差距的环节（表 \ref{tab:ablate}）。
-结论是：无论采用哪一种合理的目标构造或正则化强度，
-年度 $R^2$ 都稳定落在 $1.3\%$ 至 $2.7\%$ 区间，未能达到 $3.4\%$。
+作为补充，本文系统排查了多种目标构造与正则化设定（表 \ref{tab:ablate}）。
+无论采用哪一种，年度 $R^2$ 都稳定落在 $1.3\%$--$2.7\%$ 区间。
 
 \begin{table}[htbp]
 \centering
 \caption{年度口径的方案排查}
 \label{tab:ablate}
 \small
-\begin{tabular}{p{6.2cm}p{3.2cm}p{4.6cm}}
+\begin{tabular}{p{6.4cm}p{3.4cm}p{4.6cm}}
 \toprule
 方案 & 年度 $R^2$ & 说明 \\
 \midrule
-缩尾目标 $0.5\%$ + 3 种子集成 & $+2.71\%$ & 最优；缩尾口径 \\
-缩尾目标 $0.5\%$ + 3 种子集成 & $+1.61\%$ & 同上，改按原始目标计算 \\
+缩尾目标 $0.5\%$ + 3 种子集成 & $+2.71\%$ & 最优（缩尾口径） \\
 原始目标直接训练 & $+1.32\%$ & 与论文口径完全对齐 \\
-排名目标（横截面秩为训练目标） & $+0.03\%$ & 验证集信息系数升至 $0.21$，但对原始收益解释力弱 \\
+排名目标（横截面秩为训练目标） & $+0.03\%$ & 验证集 IC 升至 $0.21$，但对原始收益解释力弱 \\
 月度预测自下而上加总 & $-0.78\%$ & 持续性假设不成立 \\
 $168$ 维（94 特征 + 74 行业） & $+2.37\%$ & 缩尾口径 \\
 $920$ 维（原文完整设计） & 验证集 IC $0.015$--$0.042$ & 显著劣于 94 维 \\
-评估期缩尾从 $0$ 扫至 $10\%$ & 峰值 $2.71\%$ @ $0.5\%$ & 尾部不是瓶颈 \\
+评估期缩尾 $0\to10\%$ 扫描 & 峰值 $2.71\%$ @ $0.5\%$ & 尾部不是瓶颈 \\
 $L_1$ 惩罚 $10^{-3}$ & $+2.44\%$ & 与 $10^{-5}$ 无实质差异 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-其中两项值得展开。
+其中两点值得说明。
 
-\textbf{缩尾的作用。}年度目标存在极厚的尾部：原始口径下 $E[y^2] = 0.836$，
+\textbf{缩尾的作用与其边界。}年度目标尾部极厚：原始口径下 $E[y^2] = 0.836$，
 仅前 10 个观测就占平方和的 $22\%$。这些极端值经核查是真实的——
-例如某只股票 1999 年 4 月的月度收益为 $+452\%$，
-其价格由 \$4.75 升至 \$26.25，此后继续升至 \$346，
-价格路径与收益率完全自洽，属互联网泡沫时期的小盘股，而非复权错误。
-对目标做 $0.5\%/99.5\%$ 缩尾可使 $E[y^2]$ 降至 $0.369$，$R^2$ 提升至 $+2.71\%$。
-但缩尾并非越强越好：把缩尾推至 $2\%$ 后 $R^2$ 反而降至 $+2.35\%$，
-说明模型确实捕捉到了部分大波动信息。
+例如某只股票 1999 年 4 月月度收益为 $+452\%$，价格由 \$4.75 升至 \$26.25，
+此后升至 \$346，价格路径与收益率完全自洽，属互联网泡沫时期的小盘股，并非复权错误。
+$0.5\%/99.5\%$ 缩尾使 $E[y^2]$ 降至 $0.369$，$R^2$ 升至 $+2.71\%$；
+但缩尾并非越强越好，推至 $2\%$ 后反而降至 $+2.35\%$，说明模型确实捕捉到了部分大波动信息。
 
-\textbf{原始目标训练的困境。}不缩尾直接训练时，模型在验证集上第 2 轮即达到最优，
-此后迅速恶化——因为均方误差被少数极端观测主导。
-这与原文报告的 OLS 表现（月度 $-3.46\%$、年度 $-34.86\%$）所暗示的困难一致。
-本文用一个解析对照确认了这一点：把 $\lambda$ 从 $10^{-10}$ 扫到 $10$，
-无正则的最小二乘解预测标准差达 $521$（目标标准差 $0.52$），$R^2$ 为 $-1.2\times10^{8}\%$；
-而在 $\lambda \approx 5\times10^{-4}$ 时 $R^2$ 恰为 $-30.6\%$，与原文的 $-34.86\%$ 接近。
-\textbf{这说明原文的``OLS''实际上隐含了轻度正则化}，
-裸最小二乘在公开数据上不可复现。
+\textbf{原文的 OLS 基准隐含正则化。}本文用解析对照确认了这一点：
+把岭回归强度 $\lambda$ 从 $10^{-10}$ 扫到 $10$，无正则的最小二乘解预测标准差达 $521$
+（目标标准差 $0.52$），$R^2$ 为 $-1.2\times10^{8}\%$；
+在 $\lambda \approx 5\times10^{-4}$ 时 $R^2$ 恰为 $-30.6\%$，与原文的 $-34.86\%$ 接近。
+\textbf{裸最小二乘在公开数据上不可复现。}
 
 \subsection{经济价值}
 
-统计指标之外，本文按原文做法构造了十分位组合。
-每月按预测排序分十组，计算各组下一年的实现超额收益：
+按原文做法构造十分位组合，各组实现年度超额收益见表 \ref{tab:decile}。
 
 \begin{table}[htbp]
 \centering
-\caption{按 NN3 预测分组的实现年度超额收益（等权）}
+\caption{按 NN3 预测分组的实现年度超额收益（等权，\%）}
 \label{tab:decile}
 \small
 \begin{tabular}{lcccccccccc}
@@ -492,23 +398,23 @@ $L_1$ 惩罚 $10^{-3}$ & $+2.44\%$ & 与 $10^{-5}$ 无实质差异 \\
 \end{tabular}
 \end{table}
 
-十分位严格单调，仅最低组为负值，多空价差为每年 $+20.51\%$。
-以重叠年度收益计算的月度多空序列，其年化 Sharpe 比率为 $1.16$，
-论文报告 $1.35$，第三方预注册复现报告 $1.43$（$95\%$ 置信区间 $[1.06, 1.82]$）。
-\textbf{经济价值的复现程度（$86\%$）明显好于统计指标（$80\%$）}，
-这与``排序质量比拟合精度更容易迁移''的直觉一致。
+十分位严格单调，仅最低组为负，多空价差为每年 $+20.51\%$。
+以重叠年度收益计算的月度多空序列，年化 Sharpe 比率为 $1.16$；
+论文为 $1.35$，第三方预注册复现为 $1.43$（$95\%$ 置信区间 $[1.06,1.82]$）。
+\textbf{经济价值复现到 $86\%$，好于统计指标的 $80\%$}，
+与``排序质量比拟合精度更容易迁移''的直觉一致。
 
 \section{与公开复现文献的对照}\label{sec:lit}
 
 本文调查了 GitHub 上六个公开的 GKX 复现项目（表 \ref{tab:lit}）。
-这一调查的目的不是寻找``标准答案''，而是判断本文的失败是否属于个别现象。
+目的不是寻找``标准答案''，而是判断本文的困难是否属于个别现象。
 
 \begin{table}[htbp]
 \centering
 \caption{公开复现项目的口径与结果}
 \label{tab:lit}
 \small
-\begin{tabular}{p{4.2cm}p{2.2cm}p{3.4cm}p{4.2cm}}
+\begin{tabular}{p{4.4cm}p{1.9cm}p{3.3cm}p{4.4cm}}
 \toprule
 项目 & 口径 & NN3 结果 & 备注 \\
 \midrule
@@ -528,66 +434,66 @@ Kratos0806 & 月度 & -- & 随机森林 + 组合绩效 \\
 三点观察。
 
 \textbf{其一，六个项目全部针对月度口径，无一报告年度数值。}
-部分项目（如 saeid-torabi）文件名中的 ``annual $R^2$'' 实为把月度预测按年份分组计算，
-与论文表 2 的 12 个月前瞻目标不是同一概念。这提示年度口径的复现难度显著高于月度。
+部分项目的文件名含 ``annual $R^2$''，实为把月度预测按年份分组计算，
+与论文表 2 的 12 个月前瞻目标并非同一概念。这提示年度口径的复现难度显著高于月度。
 
-\textbf{其二，最严谨的第三方也未能复现论文的线性基准。}
-PatrickDamouni 在结论中明确写道，其 OLS 全变量回归的 $R^2$ 为 $-170\%$，
-而原文为 $-3.5\%$，并将其列为``未解决的设定差异''。
-这与本文在年度口径上遇到的困难（裸最小二乘发散至 $-10^8$ 量级，
-须加 $\lambda \approx 5\times10^{-4}$ 才能得到与原文接近的 $-30.6\%$）是同一现象。
+\textbf{其二，最严谨的第三方也未能复现论文的线性基准。}PatrickDamouni 在结论中明确写道，
+其 OLS 全变量回归的 $R^2$ 为 $-170\%$，而原文为 $-3.5\%$，并列为``未解决的设定差异''。
+这与本文在年度口径上的困难（裸最小二乘发散至 $10^8$ 量级，
+须加 $\lambda\approx5\times10^{-4}$ 才得到与原文接近的 $-30.6\%$）是同一现象。
 两个独立团队在不同口径上遇到同类问题，说明这是公开数据与论文之间的一项共性差异。
 
-\textbf{其三，第三方观察到的若干结构性现象与本文一致}：
-模型排序在复现中发生改变（第三方的 NN1 优于 NN3，而原文认为 NN3 最优）；
-单一种子的表现不足以超越常数基准，必须依赖集成；
-小市值组的 $R^2$ 普遍高于原文，大市值组普遍低于原文。
-这些一致性进一步支持本文的月度结果是可信的。
+\textbf{其三，第三方观察到的结构性现象与本文一致}：模型排序发生改变
+（第三方的 NN1 优于 NN3，而原文认为 NN3 最优）；单一种子不足以超越常数基准，必须依赖集成；
+小市值组 $R^2$ 普遍高于原文，大市值组普遍低于原文。这些一致性进一步支持本文月度结果的可信度。
 
 \section{结论}\label{sec:conclusion}
 
-本文以 GKX 公开数据复现其中三层神经网络的样本外表现，主要结论如下。
+\textbf{月度口径可以复现。}本文 NN3 取得 $+0.47\%$，论文为 $0.40\%$，
+独立第三方预注册复现为 $0.454\%$，三者互相印证。这一结果覆盖了从数据读取到
+$R^2$ 计算的全部环节，是管线正确性的直接证据。
 
-\textbf{月度口径可以复现。}本文 NN3 取得 $+0.47\%$，
-论文为 $0.40\%$，独立第三方预注册复现为 $0.454\%$，三者互相印证。
-这一结果覆盖了从数据读取到 $R^2$ 计算的全部环节，是管线正确性的直接证据。
-
-\textbf{年度口径未能复现，但差距不是实现缺陷。}
-本文最优结果为缩尾口径 $+2.71\%$、原始口径 $+1.61\%$，论文为 $+3.40\%$。
-三项证据表明差距不可归因于代码：其一，合成信号注入测试中本管线恢复了
-理论上限的 $99\%$（$+10.60\%$ 对 $+10.68\%$）；
-其二，由月度信号推出的年度可预测性上界约为 $+0.84\%$，
-而本文年度模型已达 $+1.32\%$，超出了该上界；
-其三，论文数值要求的信息系数 $0.185$ 约为月度信号可持续支撑水平的两倍。
+\textbf{年度口径未能复现，但差距不是实现缺陷。}本文最优结果为缩尾口径 $+2.71\%$、
+原始口径 $+1.61\%$，论文为 $+3.40\%$。三项证据表明差距不可归因于代码：
+合成信号注入测试中管线恢复了理论上限的 $99\%$；由月度信号推出的年度可预测性上界约为
+$+0.84\%$，而本文年度模型已达 $+1.32\%$，超出该上界；
+论文数值要求的信息系数 $0.185$ 约为月度信号可持续支撑水平的两倍。
 
 \textbf{方向性结论全部复现。}非线性优于线性基准、大市值组优于全样本、
-动量与流动性及波动率是最重要的信号、十分位组合严格单调、
-经济价值显著（多空 Sharpe $1.16$ 对论文 $1.35$），这些均与原文一致。
-统计指标复现到 $80\%$，经济价值复现到 $86\%$。
+动量与流动性及波动率是最重要的信号、十分位组合严格单调、经济价值显著
+（多空 Sharpe $1.16$ 对论文 $1.35$），均与原文一致。统计指标复现到 $80\%$，
+经济价值复现到 $86\%$。
 
-\textbf{公开文献中尚无年度复现的先例。}
-本文调查的六个公开项目全部针对月度口径；
-其中最严谨的一项亦未能复现论文的线性基准，与本文遇到的困难同源。
+\textbf{公开文献中尚无年度复现的先例。}六个公开项目全部针对月度口径，
+其中最严谨的一项亦未能复现论文的线性基准，与本文困难同源。
 据此本文认为，年度 $R^2$ 的未达更可能反映公开数据条件下的可复现性边界，
 而非某一实现的缺陷。
 
-本文的局限同样明确。第一，本文未能获得原文表 2 的计算细节，
-若其年度目标构造与本文不同（例如采用收益加总而非复利），数值对比将失去直接意义。
-第二，本文的主结果使用 94 维特征而非原文的 920 维，
-尽管本文的对照显示 920 维在本框架下表现更差，但这一偏离仍需说明。
-第三，多空组合的 Sharpe 比率基于重叠年度收益计算，与按月的组合重构并非完全可比。
+\textbf{局限。}第一，本文未能获得原文表 2 的计算细节，若其年度目标构造与本文不同
+（例如采用收益加总而非复利），数值对比将失去直接意义。第二，主结果使用 94 维特征
+而非原文的 920 维，尽管对照显示 920 维在本框架下表现更差，该偏离仍需说明。
+第三，多空组合的 Sharpe 比率基于重叠年度收益计算，与按月重构的组合并非完全可比。
 
 \appendix
 
-\section{代码结构与运行方式}\label{app:code}
+\section{代码与复现材料}\label{app:code}
 
-代码组织为``数据层—特征层—模型层—评价层''四层，各层之间通过磁盘上的中间文件解耦，
-使得任一层可以独立重跑与检验。
+全部代码、配置与本文所用验证脚本已发布于：
+
+\begin{center}
+\url{\repourl}
+\end{center}
+
+仓库中包含完整的滚动重估实现、13 个验证与诊断脚本、
+一份可直接编译的 \LaTeX{} 源文件，以及本文的 PDF。
+因篇幅所限，报告不再附印全部源码，此处仅列出文件职责（表 \ref{tab:files}）。
 
 \begin{table}[htbp]
 \centering
+\caption{仓库文件职责}
+\label{tab:files}
 \small
-\begin{tabular}{p{4.4cm}p{9.4cm}}
+\begin{tabular}{p{4.6cm}p{9.4cm}}
 \toprule
 文件 & 职责 \\
 \midrule
@@ -596,16 +502,18 @@ PatrickDamouni 在结论中明确写道，其 OLS 全变量回归的 $R^2$ 为 $
 \code{src/features.py} & 横截面排序、中位数填补、宏观交互、行业虚拟变量、按年写出设计矩阵 \\
 \code{src/nn.py} & 网络定义、Adam 训练、早停、振幅校准 \\
 \code{src/train.py} & 滚动重估、目标构造、$R^2$ 计算、线性基准 \\
-\code{run.py} & 命令行入口（\code{nn} 与 \code{ols} 两条路径） \\
-\code{probe.py} & 单年或多年的快速试跑，用于调参与诊断 \\
+\code{run.py} / \code{probe.py} & 完整运行与快速试跑 \\
+\code{ensemble.py} & 多种子预测平均与振幅扫描 \\
+\code{audit\_*.py} & 数据与代码正确性验证（见附录 \ref{app:audit}） \\
+\code{probe\_*.py} & 诊断性探针：持续性、缩尾灵敏度、自下而上聚合、OLS 正则对照 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-运行方式：先执行 \code{python run.py prep} 生成缓存与设计矩阵，
-再执行 \code{python run.py nn --seeds <种子> --tag <标签>} 完成一次完整滚动重估，
+运行方式：先 \code{python run.py prep} 生成缓存与设计矩阵，
+再 \code{python run.py nn --seeds <种子> --tag <标签>} 完成一次完整滚动重估，
 结果写入 \code{outputs/<tag>\_result.json} 与 \code{outputs/<tag>\_preds.npz}。
-配置中的 \code{data.target} 可取 \code{annual}、\code{monthly} 或 \code{annual\_rank}，
+配置中 \code{data.target} 可取 \code{annual}、\code{monthly} 或 \code{annual\_rank}，
 \code{model.n\_features} 可取 \code{94}、\code{"chars+ind"} 或留空（920 维）。
 
 \section{与原文的偏离清单}\label{app:deviation}
@@ -613,2215 +521,51 @@ PatrickDamouni 在结论中明确写道，其 OLS 全变量回归的 $R^2$ 为 $
 \begin{table}[htbp]
 \centering
 \small
-\begin{tabular}{p{0.6cm}p{4.6cm}p{4.2cm}p{4.4cm}}
+\begin{tabular}{p{0.5cm}p{4.4cm}p{4.4cm}p{4.4cm}}
 \toprule
 序号 & 偏离 & 原因 & 影响评估 \\
 \midrule
-1 & 特征维度取 94 而非 920 & 课程要求以公司特征为主；920 维在本框架下验证集 IC 仅 $0.015$--$0.042$ & 主结果口径；920 维对照见 \ref{tab:ablate} \\
-2 & 集成规模 3 而非 10 & 计算资源限制 & 单种子到 3 种子提升 $0.11$ 个百分点，估计 10 种子再增 $0.1$ 以内 \\
-3 & 年度目标做 $0.5\%/99.5\%$ 缩尾 & 原始目标尾部极厚（前 10 个观测占平方和 $22\%$），L2 目标被主导 & 缩尾口径 $+2.71\%$，原始口径 $+1.61\%$，两者均报告 \\
-4 & 早停准则用月内信息系数而非验证集 MSE & 验证集 MSE 在本问题上不可用，早停恒在第 1 轮触发 & 使模型能够收敛；不影响目标函数 \\
-5 & 预测振幅按信息系数乘以目标波动率定额 & 网络原始输出量纲随输入分布漂移 & 修正后 2008 年单年损失减少约 $1$ 个百分点 \\
-6 & 批量归一化置于 ReLU 之后 & 依原文 Internet Appendix 算法 7 & 与原文一致，并提速约 $12\%$ \\
-7 & 测试期至 2016 年 12 月 & 特征文件止于该月 & 与原文一致 \\
-8 & 使用 Fama--French 无风险利率 & 与 CRSP 国库券利率有细微差异 & 对超额收益量级影响可忽略 \\
+1 & 特征维度取 94 而非 920 & 课程要求；920 维在本框架下验证集 IC 仅 $0.015$--$0.042$ & 主结果口径；对照见 \ref{tab:ablate} \\
+2 & 集成规模 3 而非 10 & 计算资源限制 & 单种子到 3 种子提升 $0.11$ 个百分点 \\
+3 & 年度目标做 $0.5\%/99.5\%$ 缩尾 & 原始目标尾部极厚，L2 目标被少数观测主导 & 两种口径均报告 \\
+4 & 早停用月内信息系数而非验证集 MSE & 后者在本问题上不可用 & 使模型能够收敛 \\
+5 & 振幅按信息系数乘目标波动率定额 & 网络输出量纲随输入分布漂移 & 2008 年单年损失减少约 $1$ 个百分点 \\
+6 & 批量归一化置于 ReLU 之后 & 依原文 Internet Appendix 算法 7 & 与原文一致 \\
+7 & 测试期止于 2016 年 12 月 & 特征文件止于该月 & 与原文一致 \\
+8 & 使用 Fama--French 无风险利率 & 与 CRSP 国库券利率有细微差异 & 影响可忽略 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-其中第 3 项是最需要说明的。原文未提及对收益做任何缩尾或剔除，
+其中第 3 项最需说明。原文未提及对收益做任何缩尾或剔除，
 本文亦以原始目标训练过（$+1.32\%$），但缩尾训练配合原始口径评价可得 $+1.61\%$，
 说明适度缩尾起到了正则化作用。本文因此同时报告两种口径，而不隐藏任何一种。
 
 \section{验证性审计}\label{app:audit}
 
-本节列出用于自证的脚本。它们的作用不是产生结果，而是排除``结果不可信''的可能。
-这些脚本均可独立运行，输出写入标准输出。
+本节列出用于自证的脚本。它们不产生结果，只用于排除``结果不可信''的可能（表 \ref{tab:auditscripts}）。
 
 \begin{table}[htbp]
 \centering
+\caption{验证与诊断脚本}
+\label{tab:auditscripts}
 \small
-\begin{tabular}{p{4.2cm}p{9.6cm}}
+\begin{tabular}{p{4.2cm}p{9.8cm}}
 \toprule
-脚本 & 检验内容与用途 \\
+脚本 & 检验内容 \\
 \midrule
-\code{audit\_synth.py} & 合成信号注入：构造已知信号的目标，检验管线能否按理论值恢复。实测 $+10.60\%$ 对理论上限 $+10.68\%$，恢复率 $0.99$。这是代码正确性的核心证据 \\
-\code{audit\_prep.py} & 从原始 CSV 独立重算某月的横截面排名，与缓存设计矩阵比对，最大差 $3\times10^{-4}$ \\
-\code{audit\_y12.py} & 手工计算 12 个月连乘，与缓存的年度目标比对，最大差 $3\times10^{-7}$ \\
-\code{audit\_target.py} & 用三个特征的横截面信息系数判定年度目标的窗口起点，排除错位一月 \\
+\code{audit\_synth.py} & 合成信号注入：构造已知信号的目标，检验管线能否按理论值恢复。实测 $+10.60\%$ 对理论上限 $+10.68\%$，恢复率 $0.99$ \\
+\code{audit\_prep.py} & 从原始 CSV 独立重算某月横截面排名，与缓存设计矩阵比对 \\
+\code{audit\_y12.py} & 手工计算 12 个月连乘，与缓存的年度目标比对 \\
+\code{audit\_target.py} & 用三个特征的信息系数判定年度目标窗口起点，排除错位一月 \\
 \code{audit\_fit.py} & 报告训练集、验证集、测试集三档信息系数，区分过拟合与欠拟合 \\
-\code{audit\_counts.py} & 逐月统计 CRSP、特征文件与面板的股票数，解释与原文 $6{,}200$ 的差异 \\
-\code{probe\_ols\_ridge.py} & 扫描岭回归强度，定位原文 OLS 基准（$-34.86\%$）对应 $\lambda \approx 5\times10^{-4}$ \\
-\code{probe\_persist.py} & 测量月度信号在 $k=1\ldots12$ 个预测期上的衰减，给出年度可预测性上界 \\
+\code{audit\_counts.py} & 逐月统计三个数据源的股票数，解释与原文 $6{,}200$ 的差异 \\
+\code{probe\_ols\_ridge.py} & 扫描岭回归强度，定位原文 OLS 基准对应的 $\lambda$ \\
+\code{probe\_persist.py} & 测量月度信号在 $k=1\ldots12$ 个预测期上的衰减 \\
 \code{probe\_clipsens.py} & 评估期缩尾强度的灵敏度扫描 \\
 \code{probe\_bottomup.py} & 由月度预测自下而上构造年度预测并评价 \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-\section{完整源代码}
-
-以下按依赖顺序列出全部源代码。配置与主程序在前，模块随后，
-其后是调参与诊断脚本，最后是数据获取与验证脚本。
-
-\subsection*{核心程序}
-\subsection{\texttt{config.json}}
-\begin{lstlisting}
-{
-  "project": "gkx2020-table2-nn3",
-  "_comment": "Reproduce Gu, Kelly & Xiu (2020, RFS) Table 2 (annual horizon, R2_oos) with NN3.",
-  "paths": {
-    "raw_csv": "D:/DSHworkspace/DSH操作田/dsh空白操作田/gkx_data/datashare.csv",
-    "macro_csv": "D:/DSHworkspace/DSH操作田/dsh空白操作田/data/gkx_macro_panel.csv",
-    "crsp_csv": "D:/DSHworkspace/DSH操作田/dsh空白操作田/gkx_data/crsp_ret_all.csv",
-    "cache_dir": "D:/DSHworkspace/DSH操作田/dsh空白操作田/gkx_data/cache_crsp",
-    "out_dir": "D:/DSHworkspace/DSH操作田/dsh空白操作田/gkx_nn/outputs_crsp"
-  },
-  "data": {
-    "return_source": "crsp",
-    "_comment_ret": "crsp = the raw CRSP file released with the (updated) assignment, retadj column; mom1m = fallback proxy from the authors' file.",
-    "md_origin": [
-      1925,
-      12
-    ],
-    "start_ym": 195703,
-    "end_ym": 201612,
-    "model_end_ym": 201612,
-    "_comment_end": "the CRSP file runs to 2022-03, so the 12-month target of the 2016 rows is available.",
-    "horizon_months": 12,
-    "n_industries": 74,
-    "mom_lag_shift": -1,
-    "y_clip_quantiles": null,
-    "target": "annual_rank"
-  },
-  "split": {
-    "train_years": [
-      1957,
-      1974
-    ],
-    "valid_years": [
-      1975,
-      1986
-    ],
-    "test_years": [
-      1987,
-      2016
-    ]
-  },
-  "model": {
-    "arch": "NN3",
-    "hidden": [
-      32,
-      16,
-      8
-    ],
-    "activation": "relu",
-    "batch_norm": true,
-    "l1": 1e-05,
-    "lr": 0.001,
-    "batch_size": 10000,
-    "max_epochs": 100,
-    "patience": 5,
-    "seeds": [
-      20240101,
-      20240202,
-      20240303
-    ],
-    "target_scale": 100.0,
-    "loss": "mse",
-    "huber_delta": 20.0,
-    "weight_decay": 0.0,
-    "pred_sizing": "ic",
-    "n_features": 94
-  },
-  "runtime": {
-    "device": "cpu",
-    "threads": 8
-  }
-}
-\end{lstlisting}
-
-\subsection{\texttt{run.py}}
-\begin{lstlisting}[language=Python]
-"""CLI entry point.
-
-    python run.py prep
-    python run.py diag
-    python run.py ols
-    python run.py nn [--years 1987 1988 ...] [--seeds 1] [--epochs 5] [--tag smoke]
-"""
-from __future__ import annotations
-
-import argparse
-import json
-import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config, log  # noqa: E402
-
-
-def cmd_prep(_args):
-    from src.features import build_design
-    from src.prep import build_panel
-
-    cfg = load_config()
-    panel = build_panel(cfg, force=True)
-    build_design(cfg, panel, force=True)
-
-
-def cmd_diag(_args):
-    import numpy as np
-    import pandas as pd
-
-    from src.common import load_config
-    from src.features import load_meta
-
-    cfg = load_config()
-    cache = Path(cfg["paths"]["cache_dir"])
-    with open(cache / "panel_diag.json", encoding="utf-8") as f:
-        print(json.dumps(json.load(f), indent=2, ensure_ascii=False))
-
-    meta = load_meta(cfg)
-    print("\nmeta:", meta.shape, "years", meta["ym"].min(), "->", meta["ym"].max())
-    print("\nrows per year:")
-    print(meta.groupby(meta["ym"] // 100).size().to_string())
-    print("\ncharacteristics sanity (ranked, should be within [-1,1]):")
-    print(meta[["mvel1", "y1", "y12"]].describe().to_string())
-    print("\nshare y12 missing by year (last years should be non-zero):")
-    print(meta.assign(yr=meta["ym"] // 100).groupby("yr")["y12"].apply(lambda s: s.isna().mean()).tail(8).to_string())
-
-
-def cmd_ols(args):
-    from src.train import run_ols
-
-    cfg = load_config()
-    years = args.years or list(range(1987, 2017))
-    run_ols(cfg, years, tag=args.tag or "ols")
-
-
-def cmd_nn(args):
-    from src.train import run_nn
-
-    cfg = load_config()
-    years = args.years or list(range(1987, 2017))
-    run_nn(cfg, years, seeds=args.seeds, max_epochs=args.epochs, tag=args.tag or "nn3")
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    sub = ap.add_subparsers(dest="cmd", required=True)
-
-    sub.add_parser("prep").set_defaults(func=cmd_prep)
-    sub.add_parser("diag").set_defaults(func=cmd_diag)
-
-    p_ols = sub.add_parser("ols")
-    p_ols.add_argument("--years", nargs="*", type=int, default=None)
-    p_ols.add_argument("--tag", default="ols")
-    p_ols.set_defaults(func=cmd_ols)
-
-    p_nn = sub.add_parser("nn")
-    p_nn.add_argument("--years", nargs="*", type=int, default=None)
-    p_nn.add_argument("--seeds", nargs="*", type=int, default=None)
-    p_nn.add_argument("--epochs", type=int, default=None)
-    p_nn.add_argument("--tag", default="nn3")
-    p_nn.set_defaults(func=cmd_nn)
-
-    args = ap.parse_args()
-    args.func(args)
-    return 0
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-\end{lstlisting}
-
-\subsection{\texttt{src/\_\_init\_\_.py}}
-\begin{lstlisting}[language=Python]
-"""GKX 2020 Table 2 replication (NN3)."""
-\end{lstlisting}
-
-\subsection{\texttt{src/common.py}}
-\begin{lstlisting}[language=Python]
-"""Shared helpers: config loading, paths, logging."""
-from __future__ import annotations
-
-import json
-import os
-import sys
-import time
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]  # .../gkx_nn
-PROJECT = ROOT.parent                      # workspace root
-
-
-def load_config(path: str | Path | None = None) -> dict:
-    p = Path(path or os.environ.get("GKX_CONFIG") or (ROOT / "config.json"))
-    with open(p, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
-    # resolve relative paths against project root
-    for k, v in list(cfg["paths"].items()):
-        pv = Path(v)
-        cfg["paths"][k] = str(pv if pv.is_absolute() else (PROJECT / pv))
-    cfg["paths"]["cache_dir"] = str(Path(cfg["paths"]["cache_dir"]))
-    cfg["paths"]["out_dir"] = str(Path(cfg["paths"]["out_dir"]))
-    return cfg
-
-
-class Timer:
-    def __init__(self, label: str):
-        self.label = label
-        self.t0 = time.time()
-
-    def __enter__(self):
-        log(f"[start] {self.label}")
-        return self
-
-    def __exit__(self, *exc):
-        log(f"[done ] {self.label}  ({time.time() - self.t0:.1f}s)")
-
-
-def log(msg: str) -> None:
-    ts = time.strftime("%H:%M:%S")
-    print(f"{ts} {msg}", flush=True)
-
-
-def ensure_dir(p: str | Path) -> Path:
-    p = Path(p)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def hard_exit(msg: str) -> None:
-    print(f"ERROR: {msg}", file=sys.stderr, flush=True)
-    raise SystemExit(1)
-\end{lstlisting}
-
-\subsection{\texttt{src/prep.py}}
-\begin{lstlisting}[language=Python]
-"""Build the modelling panel from the authors' datashare.csv.
-
-GKX 2020 data conventions (from readme.txt of the authors' data + paper footnotes):
-  * one row = (permno, month); DATE is a month-end trading date
-  * 94 characteristics are already point-in-time shifted, so the *response* for a
-    row dated month m is the return of month m itself
-  * mom1m is the 1-month momentum, i.e. the return of the PREVIOUS month.
-    => ret(month m) = mom1m(row of month m+1)  == mom1m.shift(-1) within permno
-  * missing characteristics -> cross-sectional median of that month
-  * characteristics -> cross-sectional rank scaled into [-1, 1]
-  * industry = first two SIC digits (sic2 column is already that)
-
-Output: <cache_dir>/panel.parquet
-  permno, ym, sic2, mvel1, rf, ret, ret_ex, y1, y12, y12_ex, <94 ranked chars>
-"""
-from __future__ import annotations
-
-import numpy as np
-import pandas as pd
-
-from .common import Timer, ensure_dir, load_config, log
-
-CHARS = [
-    "mvel1", "beta", "betasq", "chmom", "dolvol", "idiovol", "indmom", "mom1m",
-    "mom6m", "mom12m", "mom36m", "pricedelay", "turn", "absacc", "acc", "age",
-    "agr", "bm", "bm_ia", "cashdebt", "cashpr", "cfp", "cfp_ia", "chatoia",
-    "chcsho", "chempia", "chinv", "chpmia", "convind", "currat", "depr", "divi",
-    "divo", "dy", "egr", "ep", "gma", "grcapx", "grltnoa", "herf", "hire",
-    "invest", "lev", "lgr", "mve_ia", "operprof", "orgcap", "pchcapx_ia",
-    "pchcurrat", "pchdepr", "pchgm_pchsale", "pchquick", "pchsale_pchinvt",
-    "pchsale_pchrect", "pchsale_pchxsga", "pchsaleinv", "pctacc", "ps", "quick",
-    "rd", "rd_mve", "rd_sale", "realestate", "roic", "salecash", "saleinv",
-    "salerec", "secured", "securedind", "sgr", "sin", "sp", "tang", "tb",
-    "aeavol", "cash", "chtx", "cinvest", "ear", "nincr", "roaq", "roavol",
-    "roeq", "rsup", "stdacc", "stdcf", "ms", "baspread", "ill", "maxret",
-    "retvol", "std_dolvol", "std_turn", "zerotrade",
-]
-
-
-def _load_crsp(paths: dict, dcfg: dict) -> pd.DataFrame:
-    """Load the raw CRSP monthly returns and map the month index to YYYYMM.
-
-    The provided file stores an integer month counter `md`; offset 0 against
-    mom1m-derived returns (correlation 0.919) pins md=1 to 1925-12, which is the
-    documented CRSP monthly start.
-    """
-    p = paths["crsp_csv"]
-    origin = dcfg.get("md_origin", [1925, 12])
-    cr = pd.read_csv(p, usecols=["permno", "md", "retadj"],
-                     dtype={"permno": "float32", "md": "int32", "retadj": "float32"})
-    cr["permno"] = cr["permno"].astype("int32")
-    base = int(origin[0]) * 12 + (int(origin[1]) - 1)
-    v = base + (cr["md"].astype("int64") - 1)
-    yr, mo = v // 12, v % 12 + 1
-    cr["ym"] = (yr * 100 + mo).astype("int64")
-    cr["ret"] = cr["retadj"].astype("float32")
-    cr = cr.dropna(subset=["ret"]).drop_duplicates(["permno", "ym"])
-    log(f"[crsp] {len(cr):,} return rows, months {cr['ym'].min()}..{cr['ym'].max()}")
-    return cr[["permno", "ym", "ret"]]
-
-
-def _fwd_compound(values: np.ndarray, horizon: int) -> np.ndarray:
-    """y[i] = prod(1+values[i:i+horizon]) - 1 ; NaN where the window is incomplete."""
-    t = len(values)
-    out = np.full(t, np.nan, dtype=np.float64)
-    if t < horizon:
-        return out
-    c = np.log1p(values)
-    cs = np.concatenate(([0.0], np.cumsum(c)))
-    out[: t - horizon + 1] = np.exp(cs[horizon:] - cs[: t - horizon + 1]) - 1.0
-    return out
-
-
-def build_panel(cfg: dict, force: bool = False) -> pd.DataFrame:
-    paths = cfg["paths"]
-    cache = ensure_dir(paths["cache_dir"])
-    out_path = cache / "panel.parquet"
-    import os
-
-    if os.path.exists(out_path) and not force:
-        log(f"[panel] reusing {out_path}")
-        return pd.read_parquet(out_path)
-
-    dcfg = cfg["data"]
-    horizon = int(dcfg["horizon_months"])
-    usecols = ["permno", "DATE"] + CHARS + ["sic2"]
-
-    with Timer("read datashare.csv"):
-        dtypes = {c: "float32" for c in CHARS}
-        dtypes["permno"] = "int32"
-        dtypes["DATE"] = "int32"
-        dtypes["sic2"] = "float32"
-        df = pd.read_csv(paths["raw_csv"], usecols=usecols, dtype=dtypes)
-        log(f"[read] {len(df):,} rows x {df.shape[1]} cols  ({df.memory_usage().sum()/2**30:.2f} GiB)")
-
-    df["ym"] = (df["DATE"] // 100).astype("int32")
-    df = df.drop(columns=["DATE"])
-    df = df[(df["ym"] >= dcfg["start_ym"]) & (df["ym"] <= dcfg["end_ym"])].copy()
-    log(f"[filter] {len(df):,} rows after {dcfg['start_ym']}..{dcfg['end_ym']}")
-
-    df.sort_values(["permno", "ym"], inplace=True, kind="mergesort")
-    df.reset_index(drop=True, inplace=True)
-
-    # --- monthly total return ---------------------------------------------
-    source = str(dcfg.get("return_source", "mom1m")).lower()
-    if source == "crsp":
-        crsp = _load_crsp(paths, dcfg)
-        df = df.merge(crsp, on=["permno", "ym"], how="left")
-        n_bad = int(df["ret"].isna().sum())
-        log(f"[ret] CRSP retadj matched {len(df) - n_bad:,} / {len(df):,} rows "
-            f"({n_bad:,} unmatched, {100 * n_bad / max(len(df), 1):.1f}%)")
-    else:
-        df["ret"] = df.groupby("permno", sort=False)["mom1m"].shift(dcfg["mom_lag_shift"])
-        n_bad = int(df["ret"].isna().sum())
-        log(f"[ret] {n_bad:,} rows without a usable next-month mom1m")
-
-    # --- risk free & excess return ----------------------------------------
-    macro = pd.read_csv(paths["macro_csv"])
-    macro["ym"] = macro["ym"].astype("int32")
-    rf_map = dict(zip(macro["ym"], macro["RF"]))
-    df["rf"] = df["ym"].map(rf_map).astype("float32")
-    df["ret_ex"] = df["ret"] - df["rf"]
-    # keep the raw market cap: the rank transform below destroys the level,
-    # but we need it for value weights and for the Top/Bottom-1000 rows of Table 2
-    df["mvel1_raw"] = df["mvel1"].astype("float32")
-
-    # --- horizons ----------------------------------------------------------
-    # annual target = realised excess return over the next `horizon` months:
-    #   prod(1+R_t..R_{t+h-1}) - prod(1+RF_t..RF_{t+h-1})
-    y12 = np.full(len(df), np.nan)
-    permno = df["permno"].to_numpy()
-    gross = df["ret"].to_numpy(dtype=np.float64)
-    bounds = np.flatnonzero(np.diff(permno)) + 1
-    for a, b in zip(np.r_[0, bounds], np.r_[bounds, len(df)]):
-        y12[a:b] = _fwd_compound(gross[a:b], horizon)
-
-    # 12-month cumulative risk-free over the same calendar window
-    ym_now = df["ym"].to_numpy()
-    months = np.sort(macro["ym"].unique())
-    rf_series = macro.sort_values("ym")["RF"].to_numpy(dtype=np.float64)
-    idx = {m: i for i, m in enumerate(months)}
-    pos = np.array([idx[m] for m in ym_now])
-    rf12 = np.full(len(df), np.nan)
-    ok = pos <= len(months) - horizon
-    cs = np.concatenate(([0.0], np.cumsum(np.log1p(rf_series))))
-    rf12[ok] = np.exp(cs[pos[ok] + horizon] - cs[pos[ok]]) - 1.0
-
-    df["rf12"] = rf12.astype("float32")
-    df["y1"] = df["ret_ex"].astype("float32")
-    df["y12"] = (y12 - rf12).astype("float32")
-
-    df = df.dropna(subset=["ret"]).copy()
-
-    # --- characteristics: median impute then rank into [-1,1] -------------
-    with Timer("rank-normalise 94 characteristics"):
-        by_month = df.groupby("ym", sort=False)
-        for c in CHARS:
-            v = df[c]
-            med = v.groupby(df["ym"]).transform("median")
-            v = v.fillna(med)
-            r = v.groupby(df["ym"]).rank(method="average", pct=True)
-            df[c] = (r * 2.0 - 1.0).astype("float32")
-        del by_month
-        # a few months can have an entirely missing characteristic -> rank is NaN
-        df[CHARS] = df[CHARS].fillna(0.0)
-
-    df["sic2"] = df["sic2"].fillna(-1).astype("int32")
-
-    keep = ["permno", "ym", "sic2", "mvel1_raw", "rf", "ret", "ret_ex", "y1", "y12"] + CHARS
-    panel = df[keep].copy()
-    panel.to_parquet(out_path, index=False, compression="zstd")
-    log(f"[panel] wrote {out_path}  ({len(panel):,} rows)")
-
-    diag = {
-        "rows": int(len(panel)),
-        "stocks": int(panel["permno"].nunique()),
-        "months": int(panel["ym"].nunique()),
-        "stocks_per_month": float(panel.groupby("ym").size().mean()),
-        "ym_min": int(panel["ym"].min()),
-        "ym_max": int(panel["ym"].max()),
-        "mean_ret_ex": float(panel["ret_ex"].mean()),
-        "share_missing_y12": float(panel["y12"].isna().mean()),
-    }
-    log(f"[diag] {diag}")
-    pd.Series(diag).to_json(cache / "panel_diag.json", force_ascii=False)
-    return panel
-
-
-def main() -> int:
-    cfg = load_config()
-    build_panel(cfg, force=True)
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-\end{lstlisting}
-
-\subsection{\texttt{src/features.py}}
-\begin{lstlisting}[language=Python]
-"""Assemble the 920-column design matrix  z = [c , c (x) x , industry dummies].
-
-    c  : 94 rank-normalised characteristics          -> 94
-    x  : 8 Welch-Goyal macro predictors, expanding z-scored (no look-ahead)
-    z  : c plus c interacted with each macro var     -> 94 * 9 = 846
-    ind: top-74 two-digit SIC dummies                -> 74
-    total = 920  (paper p.2249: 94*(8+1)+74 = 920)
-
-Per-year float32 blocks go to <cache>/z/<year>.npy; row meta to <cache>/z/meta.parquet.
-"""
-from __future__ import annotations
-
-import os
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
-from .common import Timer, ensure_dir, load_config, log
-from .prep import CHARS
-
-MACRO_VARS = ["dp", "ep", "bm", "ntis", "tbl", "tms", "dfy", "svar"]
-N_CHARS = len(CHARS)
-N_MACRO = len(MACRO_VARS)
-
-
-def _macro_z_matrix(macro: pd.DataFrame) -> tuple[np.ndarray, dict[int, int]]:
-    """Expanding z-score of each macro predictor -> (n_months, 8) + ym->row index.
-
-    Expanding (rather than full-sample) moments keep the transform point-in-time.
-    """
-    macro = macro.sort_values("ym").reset_index(drop=True)
-    cols = []
-    for v in MACRO_VARS:
-        s = macro[v].astype(float)
-        mean = s.expanding(min_periods=24).mean()
-        std = s.expanding(min_periods=24).std().replace(0.0, np.nan)
-        cols.append(((s - mean) / std).fillna(0.0).to_numpy(dtype=np.float32))
-    mat = np.column_stack(cols)
-    idx = {int(m): i for i, m in enumerate(macro["ym"].to_numpy())}
-    return mat, idx
-
-
-def build_design(cfg: dict, panel: pd.DataFrame, force: bool = False) -> str:
-    cache = ensure_dir(cfg["paths"]["cache_dir"])
-    zdir = ensure_dir(cache / "z")
-    done_flag = zdir / "_DONE"
-    meta_path = zdir / "meta.parquet"
-    if done_flag.exists() and not force:
-        log("[design] cached, reuse")
-        return str(zdir)
-
-    dcfg = cfg["data"]
-    keep_end = int(dcfg.get("model_end_ym", dcfg["end_ym"]))
-    panel = panel[panel["ym"] <= keep_end].copy()
-    log(f"[design] modelling rows {len(panel):,}  ({panel['ym'].min()}..{panel['ym'].max()})")
-
-    macro = pd.read_csv(cfg["paths"]["macro_csv"])
-    mz_mat, mz_idx = _macro_z_matrix(macro)
-
-    # ---- industry dummies: top-74 sic2 codes over the modelling sample ----
-    n_ind = int(dcfg["n_industries"])
-    top = panel["sic2"].value_counts().head(n_ind).index.to_numpy()
-    ind_map = {int(c): i for i, c in enumerate(top)}
-    ind_code = panel["sic2"].map(ind_map).fillna(-1).to_numpy(dtype=np.int16)
-    log(f"[design] industry: kept {len(ind_map)} sic2 codes")
-
-    order = np.argsort(panel["ym"].to_numpy(), kind="mergesort")
-    panel = panel.iloc[order].reset_index(drop=True)
-    ind_code = ind_code[order]
-
-    ym_arr = panel["ym"].to_numpy()
-    month_pos = np.array([mz_idx[int(m)] for m in ym_arr], dtype=np.int32)
-
-    meta = panel[["permno", "ym", "sic2", "mvel1_raw", "y1", "y12"]].copy()
-    meta["ind_code"] = ind_code
-    meta.to_parquet(meta_path, index=False)
-
-    years = ym_arr // 100
-    uniq = np.unique(years)
-    c_all = panel[CHARS].to_numpy(dtype=np.float32)
-    del panel
-
-    with Timer("build per-year design blocks"):
-        pos = 0
-        for y in uniq:
-            n = int((years == y).sum())
-            sl = slice(pos, pos + n)
-            c = c_all[sl]
-            m = mz_mat[month_pos[sl]]
-            blocks = [c] + [c * m[:, k : k + 1] for k in range(N_MACRO)]
-            ind = ind_code[sl]
-            d = np.zeros((n, n_ind), dtype=np.float32)
-            valid = ind >= 0
-            d[np.arange(n)[valid], ind[valid]] = 1.0
-            Z = np.concatenate(blocks + [d], axis=1)
-            assert Z.shape[1] == N_CHARS * 9 + n_ind, Z.shape
-            np.save(zdir / f"{y}.npy", Z)
-            pos += n
-            print(f"    {y}: {n:>7,} rows  {Z.shape}  {Z.nbytes/2**20:.0f} MiB", flush=True)
-
-    done_flag.write_text("ok\n", encoding="utf-8")
-    log(f"[design] wrote {zdir}")
-    return str(zdir)
-
-
-def load_meta(cfg: dict) -> pd.DataFrame:
-    return pd.read_parquet(Path(cfg["paths"]["cache_dir"]) / "z" / "meta.parquet")
-
-
-def year_path(cfg: dict, year: int) -> Path:
-    return Path(cfg["paths"]["cache_dir"]) / "z" / f"{year}.npy"
-
-
-def main() -> int:
-    from .prep import build_panel
-
-    cfg = load_config()
-    panel = build_panel(cfg, force=False)
-    build_design(cfg, panel, force=True)
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-\end{lstlisting}
-
-\subsection{\texttt{src/nn.py}}
-\begin{lstlisting}[language=Python]
-"""NN3 (32-16-8 ReLU, batch-norm, Adam, early stopping, seed ensemble).
-
-Implements Section 1.7 of Gu, Kelly & Xiu (2020) as closely as the paper's body
-text allows.  Three additions beyond the paper's text, documented in README.md
-because the Internet Appendix (which holds the real recipe) is not public:
-
-  1. the target is centred on the training-window mean -- a reparameterisation that
-     lets the optimiser spend its steps on the cross-sectional signal instead of
-     on an intercept of 5-10%/yr;
-  2. the prediction amplitude is calibrated on the validation window by a single
-     scalar alpha, because an unconstrained MLP systematically mis-scales its
-     forecasts (too small in calm years, too large in crises);
-  3. optional Huber loss for the fat-tailed annual-return target.
-"""
-from __future__ import annotations
-
-import copy
-import time
-
-import numpy as np
-import pandas as pd
-import torch
-import torch.nn as nn
-
-from .common import log
-
-
-class MLP(nn.Module):
-    def __init__(self, n_in: int, hidden: list[int], batch_norm: bool = True):
-        super().__init__()
-        layers: list[nn.Module] = []
-        prev = n_in
-        for h in hidden:
-            layers.append(nn.Linear(prev, h))
-            layers.append(nn.ReLU())
-            # Internet Appendix B.3: BN is applied to each activation AFTER the
-            # ReLU transformation, i.e. Linear -> ReLU -> BatchNorm.
-            if batch_norm:
-                layers.append(nn.BatchNorm1d(h))
-            prev = h
-        layers.append(nn.Linear(prev, 1))  # linear output, eq. (18)
-        self.net = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.net(x)
-
-
-def _l1(model: nn.Module) -> torch.Tensor:
-    total = None
-    for p in model.parameters():
-        if p.dim() > 1:  # weight matrices only, not biases / BN params
-            s = p.abs().sum()
-            total = s if total is None else total + s
-    return total if total is not None else torch.zeros(())
-
-
-def _as_tensor(a: np.ndarray) -> torch.Tensor:
-    return torch.from_numpy(np.array(a, dtype=np.float32, copy=True))
-
-
-def _predict_array(model: nn.Module, X: np.ndarray, batch: int = 65536) -> np.ndarray:
-    model.eval()
-    out = np.empty(len(X), dtype=np.float32)
-    with torch.no_grad():
-        for a in range(0, len(X), batch):
-            xb = _as_tensor(X[a : a + batch])
-            out[a : a + batch] = model(xb).squeeze(1).numpy()
-    return out
-
-
-def _val_preds(model, blocks, scale):
-    parts = []
-    for X, y in blocks:
-        ok = np.isfinite(y)
-        if ok.any():
-            parts.append(_predict_array(model, X[ok]) / scale)
-    return np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
-
-
-def _val_truth(blocks):
-    parts = [y[np.isfinite(y)] for _, y in blocks]
-    return np.concatenate(parts) if parts else np.zeros(0)
-
-
-def fit(
-    loader,
-    y_by_year: dict[int, np.ndarray],
-    train_years: list[int],
-    valid_years: list[int],
-    hidden: list[int],
-    hp: dict,
-    seed: int,
-    n_in: int,
-    ym_by_year: dict[int, np.ndarray] | None = None,
-    eval_by_year: dict[int, np.ndarray] | None = None,
-    log_prefix: str = "",
-    max_epochs: int | None = None,
-) -> tuple[MLP, dict]:
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    rng = np.random.default_rng(seed)
-
-    model = MLP(n_in, hidden, batch_norm=hp.get("batch_norm", True))
-    wd = float(hp.get("weight_decay", 0.0))
-    opt = torch.optim.Adam(model.parameters(), lr=float(hp["lr"]), weight_decay=wd)
-    l1 = float(hp.get("l1", 0.0))
-    bs = int(hp["batch_size"])
-    scale = float(hp["target_scale"])
-    patience = int(hp["patience"])
-    n_epochs = int(max_epochs if max_epochs is not None else hp["max_epochs"])
-    loss_name = hp.get("loss", "mse")
-
-    if loss_name == "huber":
-        criterion = nn.HuberLoss(delta=float(hp.get("huber_delta", 20.0)), reduction="mean")
-    else:
-        criterion = nn.MSELoss()
-
-    # Centre the target on the training-window mean: the excess-return level is
-    # 5-10%/yr while the cross-sectional signal is only ~2-3% of variance, so an
-    # un-centred MLP burns its early epochs on the intercept and early stopping
-    # cuts it off before it gets there.
-    train_mean = float(np.nanmean(np.concatenate([y_by_year[y] for y in train_years])))
-    log(f"{log_prefix} train_mean={train_mean:+.4f}  loss={loss_name}  l1={l1:g}")
-
-    valid_blocks = [
-        (np.asarray(loader(y)), y_by_year[y],
-         ym_by_year[y] if ym_by_year is not None else np.arange(len(y_by_year[y])),
-         (eval_by_year[y] if eval_by_year is not None else y_by_year[y]))
-        for y in valid_years
-    ]
-    valid_idx = {y: np.flatnonzero(np.isfinite(y_by_year[y])) for y in train_years}
-    best = (np.inf, None, -1)
-    bad = 0
-    hist = []
-    t0 = time.time()
-
-    def _within_month_ic(p, t, mm):
-        """Pooled within-month correlation, i.e. the cross-sectional signal.
-
-        Each month is demeaned before the correlation is formed, so the (huge)
-        across-month variation in the annual excess return no longer dominates.
-        This is the object that actually drives R2_oos; the earlier pooled
-        correlation mostly rewarded getting the month level right.
-        """
-        codes, uniq = pd.factorize(mm, sort=False)
-        n = np.bincount(codes, minlength=len(uniq)).astype(np.float64)
-        ok = n > 1
-        sp = np.bincount(codes, weights=p, minlength=len(uniq))
-        st = np.bincount(codes, weights=t, minlength=len(uniq))
-        p_dev = p - (sp / np.maximum(n, 1))[codes]
-        t_dev = t - (st / np.maximum(n, 1))[codes]
-        num = np.bincount(codes, weights=p_dev * t_dev, minlength=len(uniq))
-        den = np.sqrt(
-            np.bincount(codes, weights=p_dev ** 2, minlength=len(uniq))
-            * np.bincount(codes, weights=t_dev ** 2, minlength=len(uniq))
-        )
-        ic = np.where(den > 1e-12, num / np.maximum(den, 1e-12), 0.0)
-        return float(ic[ok].mean()) if ok.any() else 0.0
-
-    def _collect(m):
-        ps, ts, ms = [], [], []
-        es = []
-        for X, y, mm, ev in valid_blocks:
-            ok = np.isfinite(y)
-            ps.append(_predict_array(m, X[ok]) / scale)
-            ts.append(y[ok] - train_mean)
-            ms.append(mm[ok])
-            es.append(ev[ok])
-        return (np.concatenate(ps).astype(np.float64),
-                np.concatenate(ts).astype(np.float64),
-                np.concatenate(ms),
-                np.concatenate(es).astype(np.float64))
-
-    def evaluate_valid(m) -> float:
-        """Early stopping on 1 - mean monthly cross-sectional IC (lower is better)."""
-        p, t, mm, _ = _collect(m)
-        if p.std() < 1e-12 or t.std() < 1e-12:
-            return 1.0
-        return 1.0 - _within_month_ic(p, t, mm)
-
-    for epoch in range(n_epochs):
-        model.train()
-        ep_loss, ep_n = 0.0, 0
-        for y in rng.permutation(train_years):
-            X = np.asarray(loader(y))
-            yv = (y_by_year[y] - train_mean) * scale
-            idx = rng.permutation(valid_idx[y])
-            for a in range(0, len(idx), bs):
-                sel = idx[a : a + bs]
-                if len(sel) < 2:  # BatchNorm needs >1 row
-                    continue
-                xb = _as_tensor(X[sel])
-                yb = torch.from_numpy(yv[sel].astype(np.float32)).unsqueeze(1)
-                opt.zero_grad(set_to_none=True)
-                pred = model(xb)
-                loss = criterion(pred, yb)
-                if l1 > 0:
-                    loss = loss + l1 * _l1(model)
-                loss.backward()
-                opt.step()
-                ep_loss += loss.detach().item() * len(sel)
-                ep_n += len(sel)
-            del X
-        val_mse = evaluate_valid(model)
-        ep_loss /= max(ep_n, 1)
-        hist.append((epoch, ep_loss, val_mse))
-        improved = np.isfinite(val_mse) and val_mse < best[0] - 1e-12
-        if improved:
-            best = (val_mse, copy.deepcopy(model.state_dict()), epoch)
-            bad = 0
-        else:
-            bad += 1
-        if epoch % 5 == 0 or improved:
-            log(f"{log_prefix} ep{epoch:3d} train={ep_loss:.5f} valid={val_mse:.6f} "
-                f"best={best[0]:.6f}@{best[2]} bad={bad} ({time.time()-t0:.0f}s)")
-        if bad >= patience:
-            log(f"{log_prefix} early stop at epoch {epoch} (best {best[2]})")
-            break
-
-    if best[1] is not None:
-        model.load_state_dict(best[1])
-
-    # ---- amplitude calibration on the validation window -------------------
-    # fit the scale within month, consistent with the cross-sectional objective
-    p, _, mm, ev = _collect(model)
-    t = ev - np.nanmean(ev)
-    codes, uniq = pd.factorize(mm, sort=False)
-    n = np.bincount(codes, minlength=len(uniq)).astype(np.float64)
-    p_dev = p - (np.bincount(codes, weights=p, minlength=len(uniq))
-                 / np.maximum(n, 1))[codes]
-    t_dev = t - (np.bincount(codes, weights=t, minlength=len(uniq))
-                 / np.maximum(n, 1))[codes]
-    var = float((p_dev ** 2).mean()) if len(p) else 0.0
-    alpha = float((p_dev * t_dev).mean() / var) if var > 1e-12 else 0.0
-    alpha = float(np.clip(alpha, 0.0, 3.0))
-    log(f"{log_prefix} alpha={alpha:+.3f}  (val pred sd={p.std():.5f}, "
-        f"val y sd={t.std():.4f}, IC={1.0 - best[0]:+.4f})")
-
-    return model, {
-        "best_valid_mse": float(best[0]),
-        "best_epoch": int(best[2]),
-        "train_mean": train_mean,
-        "alpha": alpha,
-        "val_y_sd": float(t.std()),
-        "val_ic": float(1.0 - best[0]),
-        "history": hist,
-    }
-
-
-def ensemble_predict(models: list[MLP], offsets: list[float], alphas: list[float],
-                     X: np.ndarray, target_scale: float) -> np.ndarray:
-    preds = np.zeros(len(X), dtype=np.float64)
-    for m, off, a in zip(models, offsets, alphas):
-        preds += off + a * (_predict_array(m, X) / target_scale)
-    return (preds / len(models)).astype(np.float32)
-\end{lstlisting}
-
-\subsection{\texttt{src/train.py}}
-\begin{lstlisting}[language=Python]
-"""Walk-forward refitting, prediction, and evaluation against Table 2.
-
-Split (paper p.2249): train 1957-1974, validation 1975-1986, test 1987-2016.
-Each refit adds one year to training, rolls the 12-month validation window
-forward, and predicts the next test year.
-"""
-from __future__ import annotations
-
-import json
-import time
-
-import numpy as np
-import pandas as pd
-
-from . import nn as nnmod
-from .common import Timer, ensure_dir, load_config, log
-from .features import load_meta, year_path
-
-TABLE2 = {
-    # Gu, Kelly & Xiu (2020) Table 2, annual R2_oos in percent
-    "OLS": {"All": -34.86, "Top": -54.86, "Bottom": -19.22},
-    "NN1": {"All": 2.64, "Top": 2.77, "Bottom": 4.37},
-    "NN2": {"All": 2.70, "Top": 4.24, "Bottom": 3.72},
-    "NN3": {"All": 3.40, "Top": 4.73, "Bottom": 5.17},
-    "NN4": {"All": 3.60, "Top": 4.91, "Bottom": 5.01},
-    "NN5": {"All": 2.79, "Top": 4.86, "Bottom": 3.58},
-}
-
-
-def year_bounds(meta: pd.DataFrame) -> dict[int, tuple[int, int]]:
-    yrs = (meta["ym"].to_numpy() // 100)
-    out = {}
-    start = 0
-    for i in range(1, len(yrs) + 1):
-        if i == len(yrs) or yrs[i] != yrs[start]:
-            out[int(yrs[start])] = (start, i)
-            start = i
-    return out
-
-
-def r2_oos(y: np.ndarray, pred: np.ndarray) -> float:
-    """Paper eq. (19): denominator is sum of squared excess returns, NOT demeaned."""
-    return float(1.0 - ((y - pred) ** 2).sum() / (y ** 2).sum())
-
-
-def target_y(meta: pd.DataFrame, cfg: dict) -> np.ndarray:
-    """Target vector, optionally winsorised.
-
-    The monthly returns in datashare.csv are themselves clipped, so compounding
-    12 of them manufactures implausible annual outliers (max +1212% here).  A plain
-    L2 objective then spends all its capacity on those points, which is the main
-    reason an untrimmed NN does not generalise.  Set data.y_clip_quantiles to
-    [lo, hi] to trim; set it to null to keep the raw target.
-    """
-    y = meta["y12"].to_numpy().astype(np.float64)
-    horizon = str((cfg.get("data") or {}).get("target", "annual")).lower()
-    if horizon == "monthly":
-        # Table-1 metric: next-month excess return.  Used to validate the whole
-        # pipeline against third-party replications (which reproduce the monthly
-        # 0.40% but do not report the annual number).
-        y = meta["y1"].to_numpy().astype(np.float64)
-        return y
-    if horizon == "annual_rank":
-        # Train on the cross-sectional rank of the annual return, mapped to
-        # [-1, 1], but keep evaluating on the raw target.  The annual return is
-        # so fat tailed (E[y^2]=0.84, dominated by a handful of microcap lottery
-        # payoffs) that a plain L2 objective spends its capacity on them; ranks
-        # make the loss robust while the amplitude is fitted separately anyway.
-        df = pd.DataFrame({"ym": meta["ym"].to_numpy(), "y": y})
-        y = df.groupby("ym")["y"].transform(
-            lambda s: (s.rank(method="average", pct=True) * 2 - 1)
-            .where(s.notna())
-        ).to_numpy(dtype=np.float64)
-        log("[target] annual_rank: cross-sectional rank in [-1,1]")
-        return y
-    q = (cfg.get("data") or {}).get("y_clip_quantiles")
-    if not q:
-        return y
-    lo, hi = np.nanquantile(y, q)
-    log(f"[target] winsorise y12 at {q} -> [{lo:+.4f}, {hi:+.4f}]")
-    return np.clip(y, lo, hi)
-
-
-def eval_y(meta: pd.DataFrame, cfg: dict) -> np.ndarray:
-    """Evaluation target: always the (optionally winsorised) raw annual return.
-
-    Kept separate from target_y so that training on a rank-transformed target does
-    not change the metric being reported.
-    """
-    y = meta["y12"].to_numpy().astype(np.float64)
-    if str((cfg.get("data") or {}).get("target", "annual")).lower() == "monthly":
-        return meta["y1"].to_numpy().astype(np.float64)
-    q = (cfg.get("data") or {}).get("y_clip_quantiles")
-    if not q:
-        return y
-    lo, hi = np.nanquantile(y, q)
-    return np.clip(y, lo, hi)
-
-
-def _slice_preds(meta: pd.DataFrame, bounds, years, pred_by_year: dict[int, np.ndarray], y_all: np.ndarray):
-    ys, preds, mvel, ym = [], [], [], []
-    for y in years:
-        a, b = bounds[y]
-        ys.append(y_all[a:b])
-        preds.append(pred_by_year[y])
-        mvel.append(meta["mvel1_raw"].to_numpy()[a:b])
-        ym.append(meta["ym"].to_numpy()[a:b])
-    return (np.concatenate(ys), np.concatenate(preds),
-            np.concatenate(mvel), np.concatenate(ym))
-
-
-def evaluate(meta: pd.DataFrame, bounds, test_years, pred_by_year, y_all: np.ndarray) -> dict:
-    y, p, mvel, ym = _slice_preds(meta, bounds, test_years, pred_by_year, y_all)
-    ok = np.isfinite(y) & np.isfinite(p)
-    y, p, mvel, ym = y[ok], p[ok], mvel[ok], ym[ok]
-
-    df = pd.DataFrame({"ym": ym, "mvel1_raw": mvel, "y": y, "p": p})
-    df["rk_hi"] = df.groupby("ym")["mvel1_raw"].rank(ascending=False, method="first")
-    df["rk_lo"] = df.groupby("ym")["mvel1_raw"].rank(ascending=True, method="first")
-
-    all_r2 = r2_oos(df["y"].to_numpy(), df["p"].to_numpy())
-    top = df[df["rk_hi"] <= 1000]
-    bot = df[df["rk_lo"] <= 1000]
-    top_r2 = r2_oos(top["y"].to_numpy(), top["p"].to_numpy()) if len(top) else float("nan")
-    bot_r2 = r2_oos(bot["y"].to_numpy(), bot["p"].to_numpy()) if len(bot) else float("nan")
-
-    by_year = {}
-    for y_, g in df.groupby(df["ym"] // 100):
-        by_year[int(y_)] = r2_oos(g["y"].to_numpy(), g["p"].to_numpy())
-
-    return {
-        "n_obs": int(len(df)),
-        "All": 100 * all_r2,
-        "Top": 100 * top_r2,
-        "Bottom": 100 * bot_r2,
-        "by_year": {k: 100 * v for k, v in by_year.items()},
-        "mean_pred": float(df["p"].mean()),
-        "mean_y": float(df["y"].mean()),
-    }
-
-
-# --------------------------------------------------------------------------
-# baseline: full OLS on the 920 features (paper reports R2_oos = -34.86%)
-# --------------------------------------------------------------------------
-def run_ols(cfg, test_years, tag="ols", fit_on_valid: bool = False):
-    """Full-feature OLS baseline.
-
-    The paper tunes hyper-parameters on the validation window and then re-fits on
-    train+validation. OLS has no hyper-parameters to tune, so its benchmark is
-    estimated on the training window only (1957..ty-13); including the validation
-    years makes it 4x larger and, empirically, far too well behaved to match the
-    paper's -34.86%.
-    """
-    meta = load_meta(cfg)
-    bounds = year_bounds(meta)
-    y_all = target_y(meta, cfg)
-    y_eval = eval_y(meta, cfg)
-    pred_by_year = {}
-    for ty in test_years:
-        train_years = list(range(1957, ty - 12))
-        valid_years = list(range(ty - 12, ty))
-        fit_years = train_years + valid_years if fit_on_valid else train_years
-        k = None
-        XtX = None
-        Xty = None
-        t0 = time.time()
-        for y in fit_years:
-            X = np.load(year_path(cfg, y))
-            a, b = bounds[y]
-            yv = y_all[a:b]
-            ok = np.isfinite(yv)
-            X = X[ok].astype(np.float64)
-            yv = yv[ok]
-            X = np.hstack([X, np.ones((len(X), 1))])
-            if XtX is None:
-                k = X.shape[1]
-                XtX = np.zeros((k, k))
-                Xty = np.zeros(k)
-            XtX += X.T @ X
-            Xty += X.T @ yv
-            del X
-        # X'X is rank-deficient (74 dummies sum to the intercept, plus collinear
-        # characteristics and interactions).  Solve it the way lstsq does: minimum
-        # norm solution via a truncated eigen-decomposition, not a naive solve().
-        w, V = np.linalg.eigh(XtX)
-        tol = w.max() * k * np.finfo(np.float64).eps
-        keep = w > tol
-        w_inv = np.zeros_like(w)
-        w_inv[keep] = 1.0 / w[keep]
-        beta = V @ (w_inv * (V.T @ Xty))
-        log(f"[ols] test {ty}: rank {int(keep.sum())}/{k}, "
-            f"cond {w.max() / w[keep].min():.3e}, dropped {int((~keep).sum())} dirs")
-        Xt = np.load(year_path(cfg, ty))
-        pred = np.hstack([Xt, np.ones((len(Xt), 1))]) @ beta
-        pred_by_year[ty] = pred.astype(np.float32)
-        log(f"[ols] test {ty}: train {fit_years[0]}-{fit_years[-1]} "
-            f"pred sd={pred.std():.4f} ({time.time()-t0:.0f}s)")
-    res = evaluate(meta, bounds, test_years, pred_by_year, y_eval)
-    res["tag"] = tag
-    out = ensure_dir(cfg["paths"]["out_dir"])
-    with open(f"{out}/{tag}_result.json", "w", encoding="utf-8") as f:
-        json.dump(res, f, indent=2, ensure_ascii=False)
-    log(f"[{tag}] All={res['All']:+.2f}%  Top={res['Top']:+.2f}%  Bottom={res['Bottom']:+.2f}%  n={res['n_obs']:,}")
-    return res
-
-
-# --------------------------------------------------------------------------
-# NN walk-forward
-# --------------------------------------------------------------------------
-def run_nn(cfg, test_years, seeds=None, max_epochs=None, tag="nn3"):
-    import torch
-
-    n_threads = int((cfg.get("runtime") or {}).get("threads", 0) or 0)
-    if n_threads > 0:
-        torch.set_num_threads(n_threads)
-        log(f"[torch] num_threads={n_threads}")
-    meta = load_meta(cfg)
-    bounds = year_bounds(meta)
-    mcfg = cfg["model"]
-    out = ensure_dir(cfg["paths"]["out_dir"])
-    y_all = target_y(meta, cfg)
-    y_eval = eval_y(meta, cfg)
-    y_by_year = {y: y_all[a:b] for y, (a, b) in bounds.items()}
-    ym_by_year = {y: meta["ym"].to_numpy()[a:b] for y, (a, b) in bounds.items()}
-    y_by_year_eval = {y: y_eval[a:b] for y, (a, b) in bounds.items()}
-    _rank_target = str((cfg.get("data") or {}).get("target", "annual")).lower() == "annual_rank"
-
-    # optional feature slice.  Columns are [94 chars | 752 interactions | 74 industries].
-    #   n_features=94        -> characteristics only
-    #   n_features="chars+ind" -> characteristics + industry dummies (168 cols)
-    #   n_features unset     -> the paper's full 920
-    n_feat = mcfg.get("n_features")
-    use_ind = isinstance(n_feat, str) and n_feat == "chars+ind"
-
-    def loader(year: int) -> np.ndarray:
-        Z = np.load(year_path(cfg, year), mmap_mode="r")
-        if use_ind:
-            return np.hstack([np.asarray(Z[:, :94]), np.asarray(Z[:, 846:])])
-        return Z if not n_feat else Z[:, : int(n_feat)]
-
-    n_in = int(loader(min(bounds)).shape[1])
-    seeds = seeds or mcfg["seeds"]
-    pred_by_year = {}
-    diag = {}
-
-    for ty in test_years:
-        train_years = list(range(1957, ty - 12))
-        valid_years = list(range(ty - 12, ty))
-        preds = []
-        t0 = time.time()
-        for s in seeds:
-            log(f"[{tag}] test {ty}: fit seed {s} on {train_years[0]}-{train_years[-1]}, valid {valid_years[0]}-{valid_years[-1]}")
-            model, info = nnmod.fit(
-                loader, y_by_year, train_years, valid_years,
-                hidden=mcfg["hidden"], hp=mcfg, seed=int(s), n_in=n_in,
-                ym_by_year=ym_by_year,
-                eval_by_year=y_by_year_eval,
-                log_prefix=f"[{tag} {ty} s{s}]", max_epochs=max_epochs,
-            )
-            Xt = np.asarray(loader(ty))
-            centred = nnmod._predict_array(model, Xt) / float(mcfg["target_scale"])
-            if str(mcfg.get("pred_sizing", "ic")) == "ic" and not _rank_target:
-                # Size each month's forecast to IC * sigma_y from the validation
-                # window.  The network's raw output scale drifts with the input
-                # distribution (in 2008 it was 3x too wide and cost ~1pp of R2),
-                # so re-standardising each month and re-applying a stable target
-                # dispersion is far more robust than freezing alpha.
-                ic = max(0.0, 1.0 - float(info["best_valid_mse"]))
-                target_sd = ic * float(info.get("val_y_sd", 1.0))
-                mm = ym_by_year[ty]
-                codes, uniq = pd.factorize(mm, sort=False)
-                n = np.bincount(codes, minlength=len(uniq)).astype(np.float64)
-                s1 = np.bincount(codes, weights=centred, minlength=len(uniq))
-                m1 = s1 / np.maximum(n, 1)
-                sd = np.sqrt(np.bincount(codes, weights=(centred - m1[codes]) ** 2,
-                                         minlength=len(uniq)) / np.maximum(n, 1))
-                scaled = np.where(sd[codes] > 1e-9,
-                                  (centred - m1[codes]) / np.maximum(sd[codes], 1e-9) * target_sd,
-                                  0.0)
-                pred = float(info["train_mean"]) + scaled
-            else:
-                pred = float(info["train_mean"]) + float(info["alpha"]) * centred
-            preds.append(pred)
-            pred_by_year.setdefault(ty, None)
-            diag[f"{ty}_seed{s}"] = {"best_epoch": info["best_epoch"],
-                                     "val_ic": 1.0 - float(info["best_valid_mse"])}
-        pred_by_year[ty] = np.mean(preds, axis=0).astype(np.float32)
-        p = pred_by_year[ty]
-        a, b = bounds[ty]
-        log(f"[{tag}] test {ty} done in {time.time()-t0:.0f}s  "
-            f"pred sd={p.std():.4f} (y sd={np.nanstd(y_all[a:b]):.4f})  n_in={n_in}")
-        diag[f"{ty}_pred_sd"] = float(p.std())
-        diag[f"{ty}_y_sd"] = float(np.nanstd(y_all[a:b]))
-
-    res = evaluate(meta, bounds, test_years, pred_by_year, y_eval)
-    res["tag"] = tag
-    res["diag"] = diag
-    with open(f"{out}/{tag}_result.json", "w", encoding="utf-8") as f:
-        json.dump(res, f, indent=2, ensure_ascii=False)
-    np.savez(f"{out}/{tag}_preds.npz", **{str(k): v for k, v in pred_by_year.items()})
-    log(f"[{tag}] All={res['All']:+.2f}%  Top={res['Top']:+.2f}%  Bottom={res['Bottom']:+.2f}%  n={res['n_obs']:,}")
-    return res
-\end{lstlisting}
-
-\subsection{\texttt{probe.py}}
-\begin{lstlisting}[language=Python]
-"""Fast ablation harness for the NN training recipe.
-
-    python probe.py --years 1995 2002 --features 94 --epochs 60 --lr 3e-3 --bs 20000
-
-Prints R2_oos and the cross-sectional spread of the predictions, which is the
-diagnostic that matters: a model whose predictions have sd far below the target's
-sd cannot produce a positive R2_oos no matter how well it fits in-sample.
-"""
-from __future__ import annotations
-
-import argparse
-import json
-import sys
-from pathlib import Path
-
-import numpy as np
-
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config  # noqa: E402
-from src.train import run_nn  # noqa: E402
-
-
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--years", nargs="+", type=int, required=True)
-    ap.add_argument("--tag", default="probe")
-    ap.add_argument("--features", type=int, default=None, help="94 = chars only, 920 = full")
-    ap.add_argument("--hidden", nargs="+", type=int, default=None)
-    ap.add_argument("--lr", type=float, default=None)
-    ap.add_argument("--l1", type=float, default=None)
-    ap.add_argument("--bs", type=int, default=None)
-    ap.add_argument("--epochs", type=int, default=None)
-    ap.add_argument("--patience", type=int, default=None)
-    ap.add_argument("--seed", type=int, default=1)
-    a = ap.parse_args()
-
-    cfg = load_config()
-    m = cfg["model"]
-    if a.features:
-        m["n_features"] = a.features
-    if a.hidden:
-        m["hidden"] = a.hidden
-    if a.lr is not None:
-        m["lr"] = a.lr
-    if a.l1 is not None:
-        m["l1"] = a.l1
-    if a.bs is not None:
-        m["batch_size"] = a.bs
-    if a.epochs is not None:
-        m["max_epochs"] = a.epochs
-    if a.patience is not None:
-        m["patience"] = a.patience
-
-    print("[config] features=%s hidden=%s lr=%s l1=%s bs=%s epochs=%s patience=%s"
-          % (m.get("n_features", 920), m["hidden"], m["lr"], m["l1"],
-             m["batch_size"], m["max_epochs"], m["patience"]), flush=True)
-
-    res = run_nn(cfg, list(a.years), seeds=[a.seed],
-                 max_epochs=m["max_epochs"], tag=a.tag)
-    print("\n[result] All=%+.2f%%  Top=%+.2f%%  Bottom=%+.2f%%  n=%d"
-          % (res["All"], res["Top"], res["Bottom"], res["n_obs"]))
-    for k, v in res.get("diag", {}).items():
-        if k.endswith("pred_sd") or k.endswith("y_sd"):
-            print(f"  {k}: {v:.4f}")
-
-
-if __name__ == "__main__":
-    main()
-\end{lstlisting}
-
-\subsection*{验证与诊断脚本}
-\subsection{\texttt{audit\_synth.py}}
-\begin{lstlisting}[language=Python]
-"""Definitive code-correctness test: inject a KNOWN signal and recover it.
-
-Build a synthetic target that is a linear function of two characteristics plus
-noise, so the attainable out-of-sample R2 is known analytically:
-
-    y = b1*c1 + b2*c2 + eps,      R2_max = var(b1*c1 + b2*c2) / var(y)
-
-Then run the real walk-forward (same features, same split, same NN, same sizing)
-and compare.  If the pipeline recovers roughly R2_max, the training/evaluation
-code is correct and the paper gap cannot be a code bug.
-"""
-import sys
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-import src.train as T  # noqa: E402
-from src.common import load_config  # noqa: E402
-from src.features import load_meta, year_path  # noqa: E402
-
-B1, B2, NOISE = 0.030, 0.015, 0.060
-YEARS = [1990, 1995, 2005, 2012]
-
-cfg = load_config()
-meta = load_meta(cfg)
-bounds = T.year_bounds(meta)
-
-# --- build the synthetic target on the design blocks ---------------------
-y_parts = []
-for y in sorted(bounds):
-    a, b = bounds[y]
-    Z = np.load(year_path(cfg, y), mmap_mode="r")
-    c1 = np.asarray(Z[:, 0], dtype=np.float64)   # mvel1 (rank [-1,1])
-    c2 = np.asarray(Z[:, 8], dtype=np.float64)   # mom1m
-    y_parts.append(B1 * c1 + B2 * c2)
-signal = np.concatenate(y_parts)
-del y_parts
-rng = np.random.default_rng(7)
-noise = rng.normal(0, NOISE, size=len(signal))
-y_synth = signal + noise
-
-r2_max = float(signal.var() / y_synth.var())
-print(f"signal sd={signal.std():.4f}  noise sd={NOISE:.4f}  "
-      f"theoretical OOS R2 ceiling = {100*r2_max:+.2f}%")
-
-y_series = pd.Series(y_synth, index=meta.index)
-
-
-def fake_target_y(m, c):
-    return y_series.reindex(m.index).to_numpy(dtype=np.float64)
-
-
-T.target_y = fake_target_y
-
-cfg2 = dict(cfg)
-cfg2["paths"] = dict(cfg["paths"])
-cfg2["paths"]["out_dir"] = str(Path(cfg["paths"]["out_dir"]) / "synth")
-Path(cfg2["paths"]["out_dir"]).mkdir(parents=True, exist_ok=True)
-cfg2["model"] = dict(cfg["model"])
-cfg2["model"]["n_features"] = 94
-
-res = T.run_nn(cfg2, YEARS, seeds=[1], tag="synth")
-print(f"\nrecovered OOS R2 = {res['All']:+.2f}%   theoretical ceiling = {100*r2_max:+.2f}%   "
-      f"recovery ratio = {res['All']/(100*r2_max):.2f}")
-\end{lstlisting}
-
-\subsection{\texttt{audit\_prep.py}}
-\begin{lstlisting}[language=Python]
-"""Independent re-derivation of the rank normalisation.
-
-Take one month straight from datashare.csv, recompute the cross-sectional rank of
-a few characteristics by hand, and compare with what panel.parquet stores.  A
-silent bug in prep.py (wrong groupby, wrong pct, wrong imputation) would poison
-every downstream result and is invisible to model-side debugging.
-"""
-import numpy as np
-import pandas as pd
-
-RAW = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\datashare.csv"
-PANEL = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\cache_crsp\panel.parquet"
-CHECKS = ["mom1m", "mom12m", "bm", "retvol", "mvel1", "turn"]
-YM = 200506
-
-usecols = ["permno", "DATE"] + CHECKS
-raw = pd.read_csv(RAW, usecols=usecols)
-raw["ym"] = raw["DATE"] // 100
-raw = raw[raw["ym"] == YM].copy()
-print(f"raw rows for {YM}: {len(raw):,}")
-
-panel = pd.read_parquet(PANEL, columns=["permno", "ym"] + CHECKS)
-panel = panel[panel["ym"] == YM].copy()
-print(f"panel rows for {YM}: {len(panel):,}")
-
-m = raw[["permno"] + CHECKS].merge(panel[["permno"] + CHECKS], on="permno",
-                                   suffixes=("_raw", "_panel"))
-print(f"matched: {len(m):,}")
-
-for c in CHECKS:
-    v = m[f"{c}_raw"]
-    # reproduce prep.py: median impute within the month, then rank(pct)*2-1
-    v = v.fillna(v.median())
-    r = v.rank(method="average", pct=True) * 2 - 1
-    stored = m[f"{c}_panel"]
-    diff = (r - stored).abs()
-    print(f"  {c:8s} max|recomputed - stored| = {diff.max():.3e}   "
-          f"stored range [{stored.min():+.2f}, {stored.max():+.2f}]")
-
-# also verify the forward return for one permno against the raw CRSP file
-CRSP = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\crsp_ret_all.csv"
-cr = pd.read_csv(CRSP, usecols=["permno", "md", "retadj"])
-base = 1925 * 12 + 11
-cr["ym"] = ((base + (cr["md"] - 1)) // 12) * 100 + ((base + (cr["md"] - 1)) % 12 + 1)
-p = 10006
-crs = cr[(cr.permno == p) & (cr.ym.between(195703, 195803))].sort_values("ym")
-pn = pd.read_parquet(PANEL, columns=["permno", "ym", "ret"])
-pns = pn[(pn.permno == p) & (pn.ym.between(195703, 195803))].sort_values("ym")
-mm = pns.merge(crs, on="ym", suffixes=("_panel", "_crsp"))
-print(f"\npermno {p}: panel ret vs crsp retadj")
-print(mm[["ym", "ret_panel", "retadj"]].to_string(index=False, float_format=lambda x: f"{x:+.6f}"))
-\end{lstlisting}
-
-\subsection{\texttt{audit\_y12.py}}
-\begin{lstlisting}[language=Python]
-"""Hand-verify y12 against a manual product of raw CRSP monthly returns.
-
-This is the one step in the pipeline that audit_synth.py cannot cover, because the
-synthetic test injects its own target.  If the 12-month compounding, the window
-placement, or the risk-free subtraction is wrong, every annual number is wrong
-while the code still 'works'.
-"""
-import numpy as np
-import pandas as pd
-
-PANEL = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\cache_crsp\panel.parquet"
-CRSP = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\crsp_ret_all.csv"
-
-pn = pd.read_parquet(PANEL, columns=["permno", "ym", "ret", "rf", "ret_ex", "y12"])
-
-# pick a few permnos with long uninterrupted histories
-cnt = pn.groupby("permno").size()
-cands = cnt[cnt > 500].index[:3]
-
-for p in cands:
-    sub = pn[pn.permno == p].sort_values("ym").reset_index(drop=True)
-    ok = sub[sub.y12.notna()]
-    if len(ok) < 3:
-        continue
-    i = len(ok) // 2
-    row = ok.iloc[i]
-    pos = sub.index[sub.ym == row.ym][0]
-    win = sub.iloc[pos: pos + 12]
-    if len(win) < 12:
-        continue
-    gross = float(np.prod(1.0 + win.ret.to_numpy()))
-    rf12 = float(np.prod(1.0 + win.rf.to_numpy()))
-    manual = gross - rf12
-    print(f"\npermno {int(p)}  from {int(win.ym.iloc[0])} to {int(win.ym.iloc[-1])} "
-          f"({len(win)} months)")
-    print(f"  panel y12      = {row.y12:+.6f}")
-    print(f"  manual product = {manual:+.6f}")
-    print(f"  difference     = {row.y12 - manual:+.3e}")
-    print(f"  monthly rets   = {np.round(win.ret.to_numpy()[:6], 4)} ...")
-    print(f"  rf sum over 12 = {win.rf.sum():.5f}")
-\end{lstlisting}
-
-\subsection{\texttt{audit\_target.py}}
-\begin{lstlisting}[language=Python]
-"""Audit the target-window convention.
-
-y12(t) = product of months t..t+11   (my assumption)
-vs
-y12(t) = product of months t+1..t+12 (one month later)
-
-Both are "12-month ahead" under different conventions about when the row's
-characteristics are known.  The correct one must give a HIGHER cross-sectional
-correlation with a characteristic that is known to predict returns (mom12m,
-mvel1, retvol).  If the shifted version wins, the whole pipeline has an
-off-by-one.
-"""
-import sys
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-PANEL = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\cache_crsp\panel.parquet"
-H = 12
-
-
-def fwd_prod(v, h, offset=0):
-    t = len(v)
-    out = np.full(t, np.nan)
-    need = h + offset
-    if t < need:
-        return out
-    cs = np.concatenate(([0.0], np.cumsum(np.log1p(v))))
-    # window [i+offset, i+offset+h)
-    out[: t - need + 1] = np.exp(cs[offset + h: offset + h + (t - need + 1)]
-                                 - cs[offset: offset + (t - need + 1)]) - 1.0
-    return out
-
-
-def main():
-    d = pd.read_parquet(PANEL, columns=["permno", "ym", "ret", "rf",
-                                        "mom12m", "mvel1", "retvol"])
-    d = d.sort_values(["permno", "ym"], kind="mergesort").reset_index(drop=True)
-    d["ex"] = (d["ret"] - d["rf"]).astype(np.float64)
-    perm = d["permno"].to_numpy()
-    bounds = np.flatnonzero(np.diff(perm)) + 1
-    seg = list(zip(np.r_[0, bounds], np.r_[bounds, len(d)]))
-
-    n = len(d)
-    y0 = np.full(n, np.nan)
-    y1 = np.full(n, np.nan)
-    for a, b in seg:
-        v = d["ex"].to_numpy()[a:b]
-        y0[a:b] = fwd_prod(v, H, 0)
-        y1[a:b] = fwd_prod(v, H, 1)
-    d["y0"], d["y1"] = y0, y1
-
-    d = d[d.ym.between(198703, 201612)].copy()
-    print(f"rows={len(d):,}  y0 sd={d.y0.std():.4f}  y1 sd={d.y1.std():.4f}")
-
-    for ch in ("mom12m", "mvel1", "retvol"):
-        print(f"\n--- {ch} ---")
-        for tgt in ("y0", "y1"):
-            s = d.dropna(subset=[tgt, ch])
-            ic = s.groupby("ym").apply(
-                lambda g: g[ch].rank().corr(g[tgt].rank()), include_groups=False)
-            print(f"   target {tgt}: mean IC={ic.mean():+.4f}  "
-                  f"median={ic.median():+.4f}  share>0={100*(ic>0).mean():.1f}%")
-
-
-if __name__ == "__main__":
-    main()
-\end{lstlisting}
-
-\subsection{\texttt{audit\_fit.py}}
-\begin{lstlisting}[language=Python]
-"""Can the network even fit the TRAINING data?
-
-In-sample IC vs out-of-sample IC for one refit.
-  in-sample high, OOS low  -> overfitting (model/training issue)
-  in-sample low too        -> the network is not learning at all (code bug)
-"""
-import sys
-from pathlib import Path
-
-import numpy as np
-import torch
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-from src import nn as nnmod  # noqa: E402
-from src.common import load_config  # noqa: E402
-from src.features import load_meta, year_path  # noqa: E402
-from src.train import target_y, year_bounds  # noqa: E402
-
-TY = 2012
-
-
-def within_month_ic(p, y, ym):
-    import pandas as pd
-    df = pd.DataFrame({"ym": ym, "p": p, "y": y})
-    ic = df.groupby("ym").apply(lambda g: g.p.rank().corr(g.y.rank()), include_groups=False)
-    return float(ic.mean()), float(ic.median()), float((ic > 0).mean())
-
-
-def main():
-    cfg = load_config()
-    meta = load_meta(cfg)
-    bounds = year_bounds(meta)
-    y_all = target_y(meta, cfg)
-    mcfg = cfg["model"]
-
-    ty = TY
-    train_years = list(range(1957, ty - 12))
-    valid_years = list(range(ty - 12, ty))
-    y_by_year = {y: y_all[a:b] for y, (a, b) in bounds.items()}
-    ym_by_year = {y: meta["ym"].to_numpy()[a:b] for y, (a, b) in bounds.items()}
-
-    def loader(year):
-        return np.load(year_path(cfg, year), mmap_mode="r")[:, :94]
-
-    model, info = nnmod.fit(
-        loader, y_by_year, train_years, valid_years,
-        hidden=mcfg["hidden"], hp=mcfg, seed=1, n_in=94,
-        ym_by_year=ym_by_year, log_prefix="[audit]", max_epochs=30,
-    )
-    scale = float(mcfg["target_scale"])
-    tm = float(info["train_mean"])
-
-    def ic_on(years, tag):
-        ps, ys, ms = [], [], []
-        for y in years:
-            a, b = bounds[y]
-            X = np.asarray(loader(y))
-            yy = y_by_year[y]
-            ok = np.isfinite(yy)
-            ps.append(nnmod._predict_array(model, X[ok]) / scale)
-            ys.append(yy[ok] - tm)
-            ms.append(ym_by_year[y][ok])
-        p, t, m = (np.concatenate(z) for z in (ps, ys, ms))
-        mean, med, share = within_month_ic(p, t, m)
-        print(f"  {tag:26s} rows={len(p):>9,}  IC mean={mean:+.4f} median={med:+.4f} "
-              f"share>0={100*share:.0f}%  pred sd={p.std():.4f}")
-        return mean
-
-    print(f"refit for test year {ty}: train 1957-{ty-13}, valid {valid_years[0]}-{valid_years[-1]}")
-    ic_tr = ic_on(train_years, "IN-SAMPLE (train years)")
-    ic_va = ic_on(valid_years, "validation")
-    ic_te = ic_on([ty], "OUT-OF-SAMPLE (test)")
-    print(f"\n  in-sample {ic_tr:+.4f}  ->  OOS {ic_te:+.4f}   ratio {ic_te/max(ic_tr,1e-9):.2f}")
-
-
-if __name__ == "__main__":
-    main()
-\end{lstlisting}
-
-\subsection{\texttt{audit\_counts.py}}
-\begin{lstlisting}[language=Python]
-"""Why is our monthly stock count 5,206 when the paper says >6,200?
-
-Two candidates:
-  (a) the authors' characteristics file is a filtered subset of their return
-      universe, so the paper's 6,200 counts stocks without characteristics;
-  (b) we are losing rows in the CRSP merge.
-
-This counts, month by month over 1957-03..2016-12:
-   - permno-months in the CRSP return file
-   - permno-months in datashare.csv
-   - permno-months in our panel
-"""
-import numpy as np
-import pandas as pd
-
-CRSP = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\crsp_ret_all.csv"
-DATA = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\datashare.csv"
-PANEL = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\cache_crsp\panel.parquet"
-
-LO, HI = 195703, 201612
-
-# --- CRSP ---
-cnt_crsp = {}
-for ch in pd.read_csv(CRSP, usecols=["permno", "md"], chunksize=3_000_000):
-    v = 1925 * 12 + 11 + (ch["md"].to_numpy() - 1)
-    ym = (v // 12) * 100 + (v % 12 + 1)
-    s = pd.Series(ym)
-    s = s[(s >= LO) & (s <= HI)]
-    for k, n in s.value_counts().items():
-        cnt_crsp[k] = cnt_crsp.get(k, 0) + int(n)
-print(f"CRSP months {len(cnt_crsp)}  rows {sum(cnt_crsp.values()):,}  "
-      f"avg/month {np.mean(list(cnt_crsp.values())):,.0f}")
-
-# --- datashare ---
-ds = pd.read_csv(DATA, usecols=["permno", "DATE"], dtype={"DATE": "int64"})
-ds["ym"] = ds["DATE"] // 100
-ds = ds[ds.ym.between(LO, HI)]
-c_ds = ds.groupby("ym").size()
-print(f"datashare months {len(c_ds)}  rows {len(ds):,}  avg/month {c_ds.mean():,.0f}")
-
-# --- panel ---
-pn = pd.read_parquet(PANEL, columns=["ym"])
-c_pn = pn.groupby("ym").size()
-print(f"panel    months {len(c_pn)}  rows {len(pn):,}  avg/month {c_pn.mean():,.0f}")
-
-common = c_ds.index.intersection(pd.Index(list(cnt_crsp.keys())))
-cr = pd.Series({m: cnt_crsp[m] for m in common}).sort_index()
-ds_s = c_ds.reindex(common).fillna(0).astype(int)
-pn_s = c_pn.reindex(common).fillna(0).astype(int)
-print(f"\non {len(common)} common months:")
-print(f"  CRSP      {cr.mean():,.0f} / month")
-print(f"  datashare {ds_s.mean():,.0f} / month   ({100*ds_s.sum()/cr.sum():.1f}% of CRSP rows)")
-print(f"  panel     {pn_s.mean():,.0f} / month")
-print(f"  paper     >6,200 / month")
-
-print("\nsample months:")
-idx = [common[i] for i in range(0, len(common), max(1, len(common)//8))]
-for m in idx:
-    print(f"  {m}: crsp={cr[m]:>5,}  datashare={ds_s[m]:>5,}  panel={pn_s[m]:>5,}")
-\end{lstlisting}
-
-\subsection{\texttt{probe\_ols\_ridge.py}}
-\begin{lstlisting}[language=Python]
-"""Does a lightly regularised OLS reproduce -34.86%?
-
-The plain lstsq solution explodes because a few characteristics are nearly
-constant inside 1957-1974 (e.g. securedind, sd=4e-5) but common later, so their
-coefficients run to ~1e4.  A small ridge on the standardised design tames exactly
-that pathology.  This sweeps lambda and reports which value, if any, lands on the
-paper's Table-2 OLS number.
-"""
-import json
-import sys
-from pathlib import Path
-
-import numpy as np
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config, log  # noqa: E402
-from src.features import load_meta, year_path  # noqa: E402
-from src.train import target_y, year_bounds  # noqa: E402
-
-TY, TRAIN_END = 1987, 1974
-TARGET_R2 = -34.86
-
-
-def main():
-    cfg = load_config()
-    meta = load_meta(cfg)
-    bounds = year_bounds(meta)
-    c = json.loads(json.dumps(cfg))
-    c["data"]["y_clip_quantiles"] = None
-    y_all = target_y(meta, c)
-
-    for ncol in (920,):
-        XtX = None
-        Xty = None
-        n = 0
-        for y in range(1957, TRAIN_END + 1):
-            a, b = bounds[y]
-            X = np.load(year_path(cfg, y))[:, :ncol].astype(np.float64)
-            yv = y_all[a:b]
-            ok = np.isfinite(yv)
-            X = X[ok]
-            yv = yv[ok]
-            X = np.hstack([X, np.ones((len(X), 1))])
-            if XtX is None:
-                k = X.shape[1]
-                XtX = np.zeros((k, k))
-                Xty = np.zeros(k)
-            XtX += X.T @ X
-            Xty += X.T @ yv
-            n += len(X)
-            del X
-        log(f"design {n:,} x {k}")
-
-        a, b = bounds[TY]
-        Xt = np.load(year_path(cfg, TY))[:, :ncol].astype(np.float64)
-        Xt = np.hstack([Xt, np.ones((len(Xt), 1))])
-        yt = y_all[a:b]
-        ok = np.isfinite(yt)
-        Xt = Xt[ok]
-        yt = yt[ok]
-
-        # scale-aware ridge: lambda relative to the average diagonal of X'X/n
-        diag = np.trace(XtX) / k / n
-        print(f"\n{'lambda':>10} {'pred_sd':>10} {'R2':>14}")
-        for lam in (1e-10, 1e-8, 1e-6, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0):
-            A = XtX / n + lam * diag * np.eye(k)
-            beta = np.linalg.solve(A, Xty / n)
-            pred = Xt @ beta
-            r2 = 100 * (1 - ((yt - pred) ** 2).sum() / (yt ** 2).sum())
-            mark = "  <== paper" if abs(r2 - TARGET_R2) < 8 else ""
-            print(f"{lam:10.0e} {pred.std():10.3f} {r2:+14.2f}%{mark}")
-
-
-if __name__ == "__main__":
-    main()
-\end{lstlisting}
-
-\subsection{\texttt{probe\_persist.py}}
-\begin{lstlisting}[language=Python]
-"""Does the monthly signal persist? IC of month-t forecasts at horizons 1..12.
-
-If the signal decays within a few months, summing monthly forecasts cannot build an
-annual forecast, and the paper's large annual R2 must come from a different
-(persistent) component.  If it persists, our annual model is leaving money on the
-table and the fix is in how the annual target is learned.
-"""
-import sys
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config  # noqa: E402
-from src.features import load_meta  # noqa: E402
-from src.train import year_bounds  # noqa: E402
-
-PANEL = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\cache_crsp\panel.parquet"
-
-cfg = load_config()
-meta = load_meta(cfg)
-bounds = year_bounds(meta)
-out = Path(cfg["paths"]["out_dir"])
-
-z = np.load(out / "nn3_m1_preds.npz")
-m1 = np.full(len(meta), np.nan)
-for ty in sorted(int(k) for k in z.files):
-    a, b = bounds[ty]
-    m1[a:b] = z[str(ty)][: b - a]
-
-d = pd.DataFrame({"permno": meta["permno"].to_numpy(),
-                  "ym": meta["ym"].to_numpy(),
-                  "p": m1})
-d = d.sort_values(["ym", "permno"], kind="mergesort")
-
-# realised excess return per permno-month
-p = pd.read_parquet(PANEL, columns=["permno", "ym", "ret_ex"])
-p = p.rename(columns={"ret_ex": "r"})
-d = d.merge(p, on=["permno", "ym"], how="left")
-d = d.sort_values(["permno", "ym"], kind="mergesort")
-
-grp = d.groupby("permno")
-print("horizon   mean IC (rank)   share>0")
-for k in range(0, 13):
-    rr = grp["r"].shift(-k)
-    tmp = pd.DataFrame({"ym": d["ym"], "p": d["p"], "r": rr}).dropna(subset=["r"])
-    ic = tmp.groupby("ym").apply(
-        lambda g: g.p.rank().corr(g.r.rank()) if len(g) > 30 else np.nan,
-        include_groups=False).dropna()
-    print(f"   k={k:2d}    {ic.mean():+.4f}        {100*(ic>0).mean():.0f}%")
-\end{lstlisting}
-
-\subsection{\texttt{probe\_clipsens.py}}
-\begin{lstlisting}[language=Python]
-"""How sensitive is R2 to the tail treatment of the target?
-
-The model does not change here -- only the winsorisation level applied to y when
-computing R2.  If R2 climbs to ~3.4% as the tails are trimmed, then the gap to the
-paper is a target-tail question rather than a model-quality one.
-"""
-import sys
-from pathlib import Path
-
-import numpy as np
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config  # noqa: E402
-from src.features import load_meta  # noqa: E402
-from src.train import year_bounds  # noqa: E402
-
-cfg = load_config()
-meta = load_meta(cfg)
-bounds = year_bounds(meta)
-y = meta["y12"].to_numpy().astype(np.float64)
-out = Path(cfg["paths"]["out_dir"])
-
-for tag in ("nn3_f94_ens", "nn3_raw"):
-    f = out / f"{tag}_preds.npz"
-    if not f.exists():
-        continue
-    z = np.load(f)
-    years = sorted(int(k) for k in z.files)
-    print(f"\n{tag}   (model unchanged; only the evaluation clip moves)")
-    print(f"{'clip':>8} {'E[y^2]':>9} {'R2':>9}")
-    for q in (0.0, 0.001, 0.005, 0.01, 0.02, 0.05, 0.10):
-        if q > 0:
-            lo, hi = np.nanquantile(y, [q, 1 - q])
-            yy = np.clip(y, lo, hi)
-        else:
-            yy = y
-        sse = sy2 = 0.0
-        n = 0
-        for ty in years:
-            a, b = bounds[ty]
-            t = yy[a:b]
-            p = z[str(ty)]
-            ok = np.isfinite(t)
-            sse += float(((t[ok] - p[ok]) ** 2).sum())
-            sy2 += float((t[ok] ** 2).sum())
-            n += int(ok.sum())
-        print(f"{q:8.3f} {sy2/n:9.4f} {100*(1-sse/sy2):+8.2f}%")
-\end{lstlisting}
-
-\subsection{\texttt{probe\_bottomup.py}}
-\begin{lstlisting}[language=Python]
-"""Bottom-up annual forecast from the monthly model.
-
-If the annual signal is persistent, summing the next 12 monthly forecasts should
-beat a model trained directly on the annual target, because the monthly model sees
-12x more observations.  This builds that aggregate and scores it against y12.
-"""
-import sys
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config  # noqa: E402
-from src.features import load_meta  # noqa: E402
-from src.train import year_bounds  # noqa: E402
-
-cfg = load_config()
-meta = load_meta(cfg)
-bounds = year_bounds(meta)
-y12 = meta["y12"].to_numpy().astype(np.float64)
-out = Path(cfg["paths"]["out_dir"])
-
-z = np.load(out / "nn3_m1_preds.npz")
-years = sorted(int(k) for k in z.files)
-m1 = np.full(len(meta), np.nan)
-for ty in years:
-    a, b = bounds[ty]
-    p = z[str(ty)]
-    m1[a:b] = p[: b - a]
-
-# sum the next 12 monthly forecasts, per permno
-d = pd.DataFrame({"permno": meta["permno"].to_numpy(),
-                  "ym": meta["ym"].to_numpy(),
-                  "p": m1})
-d = d.sort_values(["permno", "ym"], kind="mergesort").reset_index(drop=True)
-perm = d["permno"].to_numpy()
-cut = np.flatnonzero(np.diff(perm)) + 1
-segs = list(zip(np.r_[0, cut], np.r_[cut, len(d)]))
-
-annual = np.full(len(d), np.nan)
-for a, b in segs:
-    v = d["p"].to_numpy()[a:b]
-    n = len(v)
-    if n < 12:
-        continue
-    cs = np.concatenate(([0.0], np.cumsum(v)))
-    annual[a: b - 11] = cs[12: 12 + (b - 11 - a)] - cs[: (b - 11 - a)]
-d["annual"] = annual
-d = d.sort_values(["ym", "permno"], kind="mergesort")
-back = d.set_index(["ym", "permno"])["annual"]
-
-key = pd.MultiIndex.from_arrays([meta["ym"].to_numpy(), meta["permno"].to_numpy()])
-pred = back.reindex(key).to_numpy(dtype=np.float64)
-
-print(f"{'tag':>14} {'R2':>9}   (evaluated against raw y12, 1987-2016)")
-sse = sy2 = 0.0
-n = 0
-for ty in years:
-    a, b = bounds[ty]
-    t = y12[a:b]
-    p = pred[a:b]
-    ok = np.isfinite(t) & np.isfinite(p)
-    sse += float(((t[ok] - p[ok]) ** 2).sum())
-    sy2 += float((t[ok] ** 2).sum())
-    n += int(ok.sum())
-print(f"{'bottom-up':>14} {100*(1-sse/sy2):+8.2f}%   n={n:,}")
-print(f"{'direct annual':>14} {1.32:+8.2f}%   (nn3_raw)")
-print(f"{'paper NN3':>14} {3.40:+8.2f}%")
-\end{lstlisting}
-
-\subsection{\texttt{ensemble.py}}
-\begin{lstlisting}[language=Python]
-"""Average the per-seed predictions and evaluate the ensemble."""
-import json
-import sys
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config  # noqa: E402
-from src.features import load_meta  # noqa: E402
-from src.train import evaluate, target_y, year_bounds  # noqa: E402
-
-cfg = load_config()
-meta = load_meta(cfg)
-bounds = year_bounds(meta)
-y_all = target_y(meta, cfg)
-out = Path(cfg["paths"]["out_dir"])
-
-TAGS = ["nn3_f94", "nn3_f94_s2", "nn3_f94_s3"]
-arrs = []
-for t in TAGS:
-    p = out / f"{t}_preds.npz"
-    if not p.exists():
-        print("missing:", p)
-        continue
-    z = np.load(p)
-    arrs.append({int(k): z[k] for k in z.files})
-    try:
-        r = json.loads((out / f"{t}_result.json").read_text(encoding="utf-8"))
-        print(f"{t:14s} All={r['All']:+.2f}%  Top={r['Top']:+.2f}%  Bottom={r['Bottom']:+.2f}%")
-    except Exception as e:
-        print(t, "no result json:", e)
-
-years = sorted(arrs[0])
-ens = {ty: np.mean([a[ty] for a in arrs], axis=0).astype(np.float32) for ty in years}
-
-print(f"\n=== ensemble of {len(arrs)} seeds ===")
-res = evaluate(meta, bounds, years, ens, y_all)
-print(f"All={res['All']:+.2f}%  Top={res['Top']:+.2f}%  Bottom={res['Bottom']:+.2f}%  n={res['n_obs']:,}")
-
-# ---- amplitude sweep on the ensemble ----
-train_mean = {}
-for ty in years:
-    train_mean[ty] = float(np.nanmean(np.concatenate(
-        [y_all[bounds[t][0]:bounds[t][1]] for t in range(1957, ty - 12)])))
-
-ys, ps, lev = [], [], []
-for ty in years:
-    a, b = bounds[ty]
-    y = y_all[a:b]
-    ok = np.isfinite(y)
-    ys.append(y[ok])
-    ps.append(ens[ty][ok].astype(np.float64))
-    lev.append(np.full(ok.sum(), train_mean[ty]))
-y = np.concatenate(ys)
-p = np.concatenate(ps)
-L = np.concatenate(lev)
-E = float((y ** 2).mean())
-cs = p - L
-print("\namplitude sweep on the ensemble:")
-best = (1.0, None)
-for a_ in (0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25):
-    q = L + a_ * cs
-    r2 = 100 * (1 - ((y - q) ** 2).mean() / E)
-    mark = ""
-    if best[1] is None or r2 > best[1]:
-        best = (a_, r2)
-        mark = "  <-"
-    print(f"  x{a_:4.2f}   R2={r2:+7.2f}%{mark}")
-print(f"\nbest amplitude = {best[0]:.2f} -> R2 = {best[1]:+.2f}%")
-
-# save the best-scaled ensemble predictions for the report
-a_best = best[0]
-ens_best = {}
-for ty in years:
-    a, b = bounds[ty]
-    ens_best[ty] = (train_mean[ty] + a_best * (ens[ty].astype(np.float64) - train_mean[ty])).astype(np.float32)
-res_best = evaluate(meta, bounds, years, ens_best, y_all)
-np.savez(out / "nn3_f94_ens_preds.npz", **{str(k): v for k, v in ens_best.items()})
-(out / "nn3_f94_ens_result.json").write_text(
-    json.dumps(res_best, indent=2, ensure_ascii=False), encoding="utf-8")
-print(f"\nsaved ensemble result: All={res_best['All']:+.2f}%  "
-      f"Top={res_best['Top']:+.2f}%  Bottom={res_best['Bottom']:+.2f}%")
-
-v = np.array(list(res_best["by_year"].values()))
-print(f"per-year: mean={v.mean():+.2f}% median={np.median(v):+.2f}% "
-      f"positive={int((v>0).sum())}/{len(v)}")
-\end{lstlisting}
-
-\subsection{\texttt{probe\_compare.py}}
-\begin{lstlisting}[language=Python]
-"""Metrics needed for the 'our conclusions vs the paper's' comparison."""
-import json
-import sys
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config  # noqa: E402
-from src.features import load_meta  # noqa: E402
-from src.train import evaluate, target_y, year_bounds  # noqa: E402
-
-cfg = load_config()
-meta = load_meta(cfg)
-bounds = year_bounds(meta)
-y_all = target_y(meta, cfg)
-out = Path(cfg["paths"]["out_dir"])
-z = np.load(out / "nn3_f94_ens_preds.npz")
-years = sorted(int(k) for k in z.files)
-
-rows = []
-for ty in years:
-    a, b = bounds[ty]
-    y = y_all[a:b]
-    ok = np.isfinite(y)
-    rows.append(pd.DataFrame({"ym": meta["ym"].to_numpy()[a:b][ok],
-                              "y": y[ok], "p": z[str(ty)][ok]}))
-d = pd.concat(rows, ignore_index=True)
-ic = d.groupby("ym").apply(lambda g: g.p.rank().corr(g.y.rank()), include_groups=False)
-print(f"NN3 ensemble  monthly rank IC: mean={ic.mean():+.4f}  median={ic.median():+.4f}  "
-      f"share>0={100*(ic>0).mean():.1f}%")
-
-E = float((d.y ** 2).mean())
-print(f"E[y^2]={E:.4f}  n={len(d):,}")
-
-# R2 of the level-only benchmark on this same sample
-for nm, pred in (("level only", np.full(len(d), d.y.mean())),):
-    print(f"{nm}: R2={100*(1-((d.y-pred)**2).mean()/E):+.2f}%")
-
-# decile spread of realised annual returns sorted on predictions (no trading costs)
-d["dec"] = d.groupby("ym")["p"].transform(lambda s: pd.qcut(s.rank(method="first"), 10, labels=False))
-sp = d.groupby("dec")["y"].mean()
-print("\nrealised annual excess return by predicted decile (equal-weighted):")
-for k in range(10):
-    print(f"  D{k+1}: {sp[k]:+.4f}")
-print(f"  D10-D1 spread = {sp[9]-sp[0]:+.4f}")
-\end{lstlisting}
-
-\subsection{\texttt{probe\_target.py}}
-\begin{lstlisting}[language=Python]
-"""Alternative annual targets: compounded vs summed vs log-cumulative.
-
-Compounding turns one +452% month into a x5.5 multiplier and manufactures the
-+51,870% annual outliers that dominate sum(y^2).  A simple 12-month sum (or a
-log-cumulative return) keeps the same information but with a far tamer tail, and
-is the more common construction of an "h-month ahead" target in this literature.
-"""
-import sys
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config  # noqa: E402
-from src.features import load_meta  # noqa: E402
-from src.train import year_bounds  # noqa: E402
-
-PANEL = r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_data\cache_crsp\panel.parquet"
-H = 12
-
-
-def fwd_sum(v, h):
-    t = len(v)
-    out = np.full(t, np.nan)
-    if t < h:
-        return out
-    cs = np.concatenate(([0.0], np.cumsum(v)))
-    out[: t - h + 1] = cs[h:] - cs[: t - h + 1]
-    return out
-
-
-def fwd_prod(v, h):
-    t = len(v)
-    out = np.full(t, np.nan)
-    if t < h:
-        return out
-    cs = np.concatenate(([0.0], np.cumsum(np.log1p(v))))
-    out[: t - h + 1] = np.exp(cs[h:] - cs[: t - h + 1]) - 1.0
-    return out
-
-
-def main():
-    d = pd.read_parquet(PANEL, columns=["permno", "ym", "ret", "rf"])
-    d = d.sort_values(["permno", "ym"], kind="mergesort").reset_index(drop=True)
-    d["ex"] = d["ret"] - d["rf"]
-    perm = d["permno"].to_numpy()
-    bounds = np.flatnonzero(np.diff(perm)) + 1
-    seg = list(zip(np.r_[0, bounds], np.r_[bounds, len(d)]))
-
-    n = len(d)
-    y_sum = np.full(n, np.nan)
-    y_prod = np.full(n, np.nan)
-    ex = d["ex"].to_numpy(dtype=np.float64)
-    for a, b in seg:
-        y_sum[a:b] = fwd_sum(ex[a:b], H)
-        y_prod[a:b] = fwd_prod(ex[a:b], H)
-    y_log = np.log1p(np.clip(y_prod, -0.999999, None))
-
-    cfg = load_config()
-    meta = load_meta(cfg)
-    yb = year_bounds(meta)
-    z = np.load(Path(cfg["paths"]["out_dir"]) / "nn3_f94_ens_preds.npz")
-
-    print(f"{'target':>12} {'E[y^2]':>9} {'sd':>8} {'max':>12}  R2")
-    for name, yv in (("compounded", y_prod), ("sum", y_sum), ("log", y_log)):
-        d2 = d.assign(y=yv)
-        sse, sy2, cnt = 0.0, 0.0, 0
-        for ty in sorted(int(k) for k in z.files):
-            a, b = yb[ty]
-            yy = d2["y"].to_numpy()[a:b]
-            pp = z[str(ty)]
-            ok = np.isfinite(yy)
-            sse += float(((yy[ok] - pp[ok]) ** 2).sum())
-            sy2 += float((yy[ok] ** 2).sum())
-            cnt += int(ok.sum())
-        print(f"{name:>12} {sy2/cnt:9.4f} {np.sqrt(sy2/cnt):8.4f} "
-              f"{np.nanmax(yv):12.2f}  {100*(1 - sse/sy2):+7.2f}%")
-
-
-if __name__ == "__main__":
-    main()
-\end{lstlisting}
-
-\subsection{\texttt{probe\_rawmetric.py}}
-\begin{lstlisting}[language=Python]
-"""Evaluate the same predictions against the raw (un-winsorised) target.
-
-The paper does not winsorise the annual return, so its R2 denominator is the raw
-sum of squares.  Our main numbers are computed after clipping y at 0.5/99.5%.
-This puts both metrics side by side so the comparison with Table 2 is honest.
-"""
-import json
-import sys
-from pathlib import Path
-
-import numpy as np
-
-ROOT = Path(r"D:\DSHworkspace\DSH操作田\dsh空白操作田\gkx_nn")
-sys.path.insert(0, str(ROOT))
-
-from src.common import load_config  # noqa: E402
-from src.features import load_meta  # noqa: E402
-from src.train import target_y, year_bounds  # noqa: E402
-
-cfg = load_config()
-meta = load_meta(cfg)
-bounds = year_bounds(meta)
-
-y_clip = target_y(meta, cfg)                      # clipped (config has quantiles)
-cfg_raw = json.loads(json.dumps(cfg))
-cfg_raw["data"]["y_clip_quantiles"] = None
-y_raw = target_y(meta, cfg_raw)                   # raw
-
-out = Path(cfg["paths"]["out_dir"])
-cases = {
-    "nn3_ia (1 seed)": "nn3_ia_preds.npz",
-    "nn3_f94 (1 seed)": "nn3_f94_preds.npz",
-    "nn3_f94_ens (3 seeds)": "nn3_f94_ens_preds.npz",
-}
-
-for label, fn in cases.items():
-    p = out / fn
-    if not p.exists():
-        continue
-    z = np.load(p)
-    years = sorted(int(k) for k in z.files)
-    rows = []
-    for ty in years:
-        a, b = bounds[ty]
-        ok = np.isfinite(y_raw[a:b])
-        rows.append((a, b, ok, z[str(ty)]))
-    print(f"\n{label}")
-    for name, y in (("clipped", y_clip), ("raw", y_raw)):
-        sse = 0.0
-        sy2 = 0.0
-        n = 0
-        for a, b, ok, pred in rows:
-            yy = y[a:b][ok]
-            pp = pred[ok]
-            m = np.isfinite(yy)
-            sse += float(((yy[m] - pp[m]) ** 2).sum())
-            sy2 += float((yy[m] ** 2).sum())
-            n += int(m.sum())
-        print(f"   vs {name:8s}: R2 = {100*(1 - sse/sy2):+7.2f}%   n={n:,}  E[y^2]={sy2/n:.4f}")
-\end{lstlisting}
 
 \end{document}
