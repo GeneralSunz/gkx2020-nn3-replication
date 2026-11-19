@@ -1,0 +1,72 @@
+{
+  "project": "gkx2020-table2-nn3",
+  "_comment": "Reproduce Gu, Kelly & Xiu (2020, RFS) Table 2 (annual horizon, R2_oos) with NN3.",
+  "paths": {
+    "raw_csv": "D:/DSHworkspace/DSH操作田/dsh空白操作田/gkx_data/datashare.csv",
+    "macro_csv": "D:/DSHworkspace/DSH操作田/dsh空白操作田/data/gkx_macro_panel.csv",
+    "crsp_csv": "D:/DSHworkspace/DSH操作田/dsh空白操作田/gkx_data/crsp_ret_all.csv",
+    "cache_dir": "D:/DSHworkspace/DSH操作田/dsh空白操作田/gkx_data/cache_crsp",
+    "out_dir": "D:/DSHworkspace/DSH操作田/dsh空白操作田/gkx_nn/outputs_crsp"
+  },
+  "data": {
+    "return_source": "crsp",
+    "_comment_ret": "crsp = the raw CRSP file released with the (updated) assignment, retadj column; mom1m = fallback proxy from the authors' file.",
+    "md_origin": [
+      1925,
+      12
+    ],
+    "start_ym": 195703,
+    "end_ym": 201612,
+    "model_end_ym": 201612,
+    "_comment_end": "the CRSP file runs to 2022-03, so the 12-month target of the 2016 rows is available.",
+    "horizon_months": 12,
+    "n_industries": 74,
+    "mom_lag_shift": -1,
+    "y_clip_quantiles": null,
+    "target": "annual_rank"
+  },
+  "split": {
+    "train_years": [
+      1957,
+      1974
+    ],
+    "valid_years": [
+      1975,
+      1986
+    ],
+    "test_years": [
+      1987,
+      2016
+    ]
+  },
+  "model": {
+    "arch": "NN3",
+    "hidden": [
+      32,
+      16,
+      8
+    ],
+    "activation": "relu",
+    "batch_norm": true,
+    "l1": 1e-05,
+    "lr": 0.001,
+    "batch_size": 10000,
+    "max_epochs": 100,
+    "patience": 5,
+    "seeds": [
+      20240101,
+      20240202,
+      20240303
+    ],
+    "target_scale": 100.0,
+    "loss": "mse",
+    "huber_delta": 20.0,
+    "weight_decay": 0.0,
+    "pred_sizing": "ic",
+    "n_features": 94
+  },
+  "runtime": {
+    "device": "cpu",
+    "threads": 8
+  }
+}
