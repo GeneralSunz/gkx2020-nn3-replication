@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# data (never committed)
+data/
+gkx_data/
+*.csv
+*.parquet
+*.npy
+*.npz
+
+# run artefacts
+outputs/
+outputs_*/
+cache/
+cache_*/
+*.log
+
+# LaTeX build products (keep report.tex and report.pdf)
+report/tmp/
+*.aux
+*.toc
+*.out
