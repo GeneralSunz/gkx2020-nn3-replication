@@ -104,11 +104,20 @@ Two inputs are required; neither is redistributed here.
 1. **Characteristics** — `datashare.csv` from the authors' site
    (<https://dachxiu.chicagobooth.edu/download/datashare.zip>).
    94 characteristics, `permno`, `DATE`, `sic2`, 1957-03 to 2016-12.
-2. **Monthly returns** — a CRSP extract with columns `permno, md, me, retadj, prc, shrcd, exchcd`,
-   where `md` is a sequential month index with `md = 1` corresponding to 1925-12.
-   Available under a WRDS licence.
+2. **Monthly returns** — a CRSP extract with columns `permno, md, me, retadj, prc, shrcd, exchcd`.
+   The `md` field is a processed month index, not a calendar month:
 
-Point `config.json` at both files:
+   ```
+   md = year(date) * 12 + month(date) - 1925*12 - 11     # md = 1 is 1925-12
+   ```
+
+   Available under a WRDS licence.
+3. **Risk-free rate** — the monthly `RF` series from the
+   [Fama–French data library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html)
+   (`F-F_Research_Data_Factors`). The panel's `RF` column is verified against that file
+   month by month in `audit_md_rf.py` (718 overlapping months, max difference 1e-16).
+
+Point `config.json` at the inputs:
 
 ```json
 "paths": { "datashare": ".../datashare.csv", "crsp": ".../crsp_ret_all.csv" }
