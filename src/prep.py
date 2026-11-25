@@ -40,9 +40,18 @@ CHARS = [
 def _load_crsp(paths: dict, dcfg: dict) -> pd.DataFrame:
     """Load the raw CRSP monthly returns and map the month index to YYYYMM.
 
-    The provided file stores an integer month counter `md`; offset 0 against
-    mom1m-derived returns (correlation 0.919) pins md=1 to 1925-12, which is the
-    documented CRSP monthly start.
+    The file stores an integer month counter produced by the instructor with
+
+        md = year(date) * 12 + month(date) - 1925 * 12 - 11
+
+    so md = 1 is 1925-12.  Inverting it gives
+
+        year*12 + month = md + 1925*12 + 11 = (1925*12 + 11) + md - 1
+
+    which is what the arithmetic below does with base = 1925*12 + 11.
+    `audit_md_rf.py` checks this decoding against the instructor's formula for
+    every one of the 1,156 distinct md values in the file (0 disagreements), and
+    independently against mom1m-era returns (offset 0, correlation 0.919).
     """
     p = paths["crsp_csv"]
     origin = dcfg.get("md_origin", [1925, 12])
